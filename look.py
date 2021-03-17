@@ -171,8 +171,6 @@ sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','cfstat_f
 data_url = []
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
 
-wl_headers=['Keyspace','Table','Table Size','Average Record Size','Est. # Records','','Keyspace','Table','Total Reads','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','Average TPS','% Writes','% RW','','TOTALS']
-wl_headers_width=[14,25,17,20,14,3,14,25,17,13,9,9,3,14,25,17,13,9,9,3,25,20]
 ks_type_abbr = {'app':'Application','sys':'System'}
 read_threshold = 1
 write_threshold = 1
@@ -189,19 +187,13 @@ for argnum,arg in enumerate(sys.argv):
     show_help = 'y'
   elif(arg=='-p'):
     data_url.append(sys.argv[argnum+1])
-  elif(arg=='-rt'):
-    read_threshold = float(sys.argv[argnum+1])/100
-  elif(arg=='-wt'):
-    write_threshold = float(sys.argv[argnum+1])/100
-  elif(arg=='-sys'):
-    include_system = 1
 
 if (include_system): ks_type_array=['app','sys']
 else: ks_type_array=['app']
 
 if show_help:
   help_content = \
-  'usage: explore.py [-h] [--help] [-inc_yaml]\n'\
+  'usage: look.py [-h] [--help] [-inc_yaml]\n'\
   '                       [-p PATH_TO_DIAG_FOLDER]\n'\
   '                       [-rt READ_THRESHOLD]\n'\
   '                       [-wt WRITE_THRESHOLD]\n'\
@@ -211,34 +203,27 @@ if show_help:
   '-p                     Path to the diagnostics folder\n'\
   '                        Multiple diag folders accepted\n'\
   '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
-  '-rt                    Defines percentage of read load\n'\
-  '                        to be included in the output\n'\
-  '                        Default: 100%\n'\
-  '                        i.e. -rt 85\n'\
-  '-wt                    Defines percentage of write load\n'\
-  '                        to be included in the output\n'\
-  '                        Default: 100%\n'\
-  '                        i.e. -wt 85\n'
-  '-sys                   Include System files in addtional tab\n'\
 
   exit(help_content)
 
 for cluster_url in data_url:
   cluster_name=''
   is_index = 0
-  read_subtotal = {'app':0,'sys':0}
-  write_subtotal = {'app':0,'sys':0}
-  total_size = {'app':0,'sys':0}
-  astra_size = {'app':0,'sys':0}
-  dc_total_size = {'app':0,'sys':0}
-  total_reads = {'app':0,'sys':0}
-  total_writes = {'app':0,'sys':0}
-  read_count = {'app':[],'sys':[]}
-  write_count = {'app':[],'sys':[]}
-  total_rw = {'app':0,'sys':0}
-  ks_array = {'app':[],'sys':[]}
+  read_subtotal = 0
+  write_subtotal = 0
+  total_size = 0
+  astra_size = 0
+  dc_total_size = 0
+  total_reads = 0
+  total_writes = 0
+  astra_total_writes = 0
+  read_count = []
+  write_count =[]
+  astra_write_count =[]
+  total_rw = 0
+  ks_array = []
   count = 0
-  size_table = {'app':{},'sys':{}}
+  size_table = {}
   read_table = {}
   write_table = {}
   size_totals = {}
@@ -300,8 +285,7 @@ for cluster_url in data_url:
           line = line.strip('\n').strip()
           if('CREATE KEYSPACE' in line):
             prev_ks = ks
-            if (ks in system_keyspace): ks_array['sys'].append(ks)
-            else: ks_array['app'].append(ks)
+            ks_array.append(ks)
             ks = line.split()[2].strip('"')
             tbl_data[ks] = {'cql':line,'rf':0}
             rf=0;
@@ -435,9 +419,7 @@ for cluster_url in data_url:
         else:
           if('Keyspace' in line):
             ks = line.split(':')[1].strip()
-            ks_type='app'
-            if (ks in system_keyspace): ks_type = 'sys'
-          elif (ks_type<>''):
+          if (ks<>''):
             if('Table: ' in line):
               tbl = line.split(':')[1].strip()
               is_index = 0
@@ -448,28 +430,28 @@ for cluster_url in data_url:
               if ('Space used (total):' in line):
                 tsize = float(line.split(':')[1].strip())
                 if (tsize):
-                  total_size[ks_type] += tsize
+                  total_size += tsize
                   # astra pricing will be based on data on one set of data
                   # divide the total size by the total rf (gives the size per node)
                   try:
-                    astra_size[ks_type] += tsize / tbl_data[ks]['rf']
+                    astra_size += tsize / tbl_data[ks]['rf']
                   except:
                     tbl_data[ks] = {}
                     tbl_data[ks]['rf'] = float(1)
-                    astra_size[ks_type] += tsize / tbl_data[ks]['rf']
+                    astra_size += tsize / tbl_data[ks]['rf']
                   try:
-                    type(size_table[ks_type][ks])
+                    type(size_table[ks])
                   except:
-                    size_table[ks_type][ks] = {}
+                    size_table[ks] = {}
                   try:
-                    type(size_table[ks_type][ks][tbl])
-                    size_table[ks_type][ks][tbl] += tsize / tbl_data[ks]['rf']
+                    type(size_table[ks][tbl])
+                    size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
                   except:
-                    size_table[ks_type][ks][tbl] = tsize / tbl_data[ks]['rf']
+                    size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
               if('Local read count: ' in line):
                 count = int(line.split(':')[1].strip())
                 if (count > 0):
-                  total_reads[ks_type] += count
+                  total_reads += count
                   try:
                     type(read_table[ks])
                   except:
@@ -483,7 +465,11 @@ for cluster_url in data_url:
                 if('Local write count: ' in line):
                   count = int(line.split(':')[1].strip())
                   if (count > 0):
-                    total_writes[ks_type] += count
+                    try:
+                      astra_total_writes += count / tbl_data[ks]['rf']
+                      total_writes += count
+                    except:
+                      total_writes += count
                     try:
                       type(write_table[ks])
                     except:
@@ -495,22 +481,22 @@ for cluster_url in data_url:
                       write_table[ks][tbl] = count
   
   for ks,readtable in read_table.items():
-    if ks not in system_keyspace and ks != '': ks_type='app'
-    else: ks_type='sys'
     for tablename,tablecount in readtable.items():
-      read_count[ks_type].append({'keyspace':ks,'table':tablename,'count':tablecount})
+      read_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
 
   for ks,writetable in write_table.items():
-    if ks not in system_keyspace and ks != '': ks_type='app'
-    else: ks_type='sys'
     for tablename,tablecount in writetable.items():
-      write_count[ks_type].append({'keyspace':ks,'table':tablename,'count':tablecount})
+      try:
+        astracount = tablecount / tbl_data[ks]['rf']
+        astra_write_count.append({'keyspace':ks,'table':tablename,'count':astracount})
+        write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
+      except:
+        astra_write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
+        write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
 
-  for ks_type in ks_type_array:
-    read_count[ks_type].sort(reverse=True,key=sortFunc)
-    write_count[ks_type].sort(reverse=True,key=sortFunc)
-    total_rw[ks_type] = total_reads[ks_type]+total_writes[ks_type]
-  
+  read_count.sort(reverse=True,key=sortFunc)
+  write_count.sort(reverse=True,key=sortFunc)
+  total_rw = total_reads+total_writes
   
   cluster_gcpause = []
   node_dc = {}
@@ -580,17 +566,27 @@ for cluster_url in data_url:
   for node, node_pause in node_gcpause.items():
     get_gc_data('Node',node,node_pause,1)
 
-  #list DC
+  # Create DC List
   for node_val, dc_val in node_dc.items():
     dc_list.append(dc_val)
   dc_list = list(dict.fromkeys(dc_list))
   dc_list.sort()
 
-  #Create Cluster GC Spreadsheet
+  # Create Workbook
+  stats_sheets = {}
   worksheet = {}
   workbook = xlsxwriter.Workbook(cluster_url + '/' + cluster_name + '_' + 'astra_chart' + '.xlsx')
+  
+  # Create Tabs
   worksheet_chart = workbook.add_worksheet('Astra Chart')
+  worksheet = workbook.add_worksheet('Workload')
+  ds_worksheet = workbook.add_worksheet('Data Size')
+  gc_worksheet = workbook.add_worksheet('GC Pauses')
+  for sheet_array in sheets_data:
+    stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
 
+
+  # Create Formats
   header_format1 = workbook.add_format({
       'bold': True,
       'italic' : True,
@@ -700,16 +696,53 @@ for cluster_url in data_url:
       'font_color': 'white',
       'bg_color': '#EB6C34'})
 
-  for ks_type in ks_type_array:
-    worksheet[ks_type] = workbook.add_worksheet(ks_type_abbr[ks_type] + ' Workload')
+  
+  ds_worksheet.merge_range('A1:G1', 'Table Size', title_format)
 
-    column=0
-    for col_width in wl_headers_width:
-      worksheet[ks_type].set_column(column,column,col_width)
+  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size','Average Record Size','Est. # Records']
+  ds_headers_width=[14,25,17,4,17,20,14]
+
+  column=0
+  for col_width in ds_headers_width:
+    ds_worksheet.set_column(column,column,col_width)
+    column+=1
+
+
+  column=0
+  for header in ds_headers:
+      if header == '':
+        ds_worksheet.write(1,column,header)
+      else:
+        ds_worksheet.write(1,column,header,header_format1)
       column+=1
 
+  row = 2
+  perc_reads = 0.0
+  column = 0
+  total_t_size = 0
+  total_set_size = 0.0
+  for ks,t_data in size_table.items():
+    for tbl,t_size in t_data.items():
+      total_t_size += t_size
+      total_set_size += float(t_size)/float(tbl_data[ks]['rf'])
+      ds_worksheet.write(row,column,ks,data_format)
+      ds_worksheet.write(row,column+1,tbl,data_format)
+      ds_worksheet.write(row,column+2,t_size,num_format1)
+      ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
+      ds_worksheet.write(row,column+4,float(t_size)/float(tbl_data[ks]['rf']),num_format1)
+      try:
+        ds_worksheet.write(row,column+5,tbl_row_size[ks][tbl],num_format1)
+      except:
+        ds_worksheet.write(row,column+5,"no data",num_format1)
+      try:
+        ds_worksheet.write(row,column+6,t_size/tbl_row_size[ks][tbl],num_format1)
+      except:
+        ds_worksheet.write(row,column+6,"no data",num_format1)
+      row+=1
 
-
+  ds_worksheet.write(row,column,'Total',header_format4)
+  ds_worksheet.write(row,column+2,total_t_size,num_format1)
+  ds_worksheet.write(row,column+4,total_set_size,num_format1)
 
   cluster_name = ''
   prev_nodes = []
@@ -717,7 +750,6 @@ for cluster_url in data_url:
   headers = {}
   col_widths = {}
   sheets_record = {}
-  stats_sheets = {}
   row = {}
   node_status = 1
   proxyhistData = {}
@@ -730,7 +762,7 @@ for cluster_url in data_url:
         cluster_name = get_param(clusterpath,'Name:',1)
 
         for sheet_array in sheets_data:
-          stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
+#          stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
           headers[sheet_array['sheet_name']] = sheet_array['headers']
           col_widths[sheet_array['sheet_name']] = sheet_array['widths']
           sheets_record[sheet_array['sheet_name']]={}
@@ -779,9 +811,9 @@ for cluster_url in data_url:
       for line in cfstatFile:
         if('Keyspace' in line):
           keyspace = line.split(':')[1].strip()
-        elif('Table: ' in line):
+        elif('Table: ' in line and keyspace not in system_keyspace):
           table = line.split(':')[1].strip()
-        elif(':' in line):
+        elif(':' in line and keyspace not in system_keyspace):
           header = line.split(':')[0].strip()
           value = line.split(':')[1].strip()
           row_data = [node,dc,keyspace,table,header,value]
@@ -843,217 +875,199 @@ for cluster_url in data_url:
           write_row('ph',row_data,data_format,[6])
           prev_nodes.append(nodeid)
 
-  for ks_type in ks_type_array:
-    worksheet[ks_type].merge_range('A1:V1', 'Workload for '+cluster_name, title_format3)
-    worksheet[ks_type].merge_range('A2:E2', 'Table Size', title_format)
-    worksheet[ks_type].merge_range('G2:L2', 'Reads', title_format)
-    worksheet[ks_type].merge_range('N2:S2', 'Writes', title_format)
-    worksheet[ks_type].merge_range('U2:V2', 'Totals', title_format)
+  # Create Workload Tab
+  wl_headers=['Keyspace','Table','Total Reads','Read Calls','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','RF','Write Calls','Average TPS','% Writes','% RW']
+  wl_headers_width=[14,25,17,13,13,9,9,3,14,25,17,4,17,13,9,9]
 
-  for ks_type in ks_type_array:
-    column=0
-    for header in wl_headers:
-        if header == '':
-          worksheet[ks_type].write(2,column,header)
-        else:
-          worksheet[ks_type].write(2,column,header,header_format1)
-        column+=1
+  column=0
+  for col_width in wl_headers_width:
+    worksheet.set_column(column,column,col_width)
+    column+=1
 
-  last_row = 0
+  worksheet.merge_range('A1:P1', 'Workload for '+cluster_name, title_format3)
+  worksheet.merge_range('A2:G2', 'Reads', title_format)
+  worksheet.merge_range('I2:P2', 'Writes', title_format)
 
-  for ks_type in ks_type_array:
-    row = {'app':3,'sys':3}
-    perc_reads = 0.0
-    column = 0
-    for ks,t_data in size_table[ks_type].items():
-      for tbl,t_size in t_data.items():
-        
-        worksheet[ks_type].write(row[ks_type],column,ks,data_format)
-        worksheet[ks_type].write(row[ks_type],column+1,tbl,data_format)
-        worksheet[ks_type].write(row[ks_type],column+2,t_size,num_format1)
-        try:
-          worksheet[ks_type].write(row[ks_type],column+3,tbl_row_size[ks][tbl],num_format1)
-        except:
-          worksheet[ks_type].write(row[ks_type],column+3,"no data",num_format1)
-        try:
-          worksheet[ks_type].write(row[ks_type],column+4,t_size/tbl_row_size[ks][tbl],num_format1)
-        except:
-          worksheet[ks_type].write(row[ks_type],column+4,"no data",num_format1)
-
-        row[ks_type]+=1
-
-    last_row = row[ks_type]
-
-    row = {'app':3,'sys':3}
-    perc_reads = 0.0
-    column = 6
-    for reads in read_count[ks_type]:
-      perc_reads = float(read_subtotal[ks_type]) / float(total_reads[ks_type])
-      if (perc_reads <= read_threshold):
-        ks = reads['keyspace']
-        tbl = reads['table']
-        cnt = reads['count']
-        try:
-          type(table_totals[ks])
-        except:
-          table_totals[ks] = {}
-        table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
-        read_subtotal[ks_type] += cnt
-        worksheet[ks_type].write(row[ks_type],column,ks,data_format)
-        worksheet[ks_type].write(row[ks_type],column+1,tbl,data_format)
-        worksheet[ks_type].write(row[ks_type],column+2,cnt,num_format1)
-        worksheet[ks_type].write(row[ks_type],column+3,float(cnt)/total_uptime,num_format2)
-        worksheet[ks_type].write(row[ks_type],column+4,float(cnt)/total_reads[ks_type],perc_format)
-        worksheet[ks_type].write(row[ks_type],column+5,float(cnt)/float(total_rw[ks_type]),perc_format)
-        row[ks_type]+=1
-  
-    if (last_row<row[ks_type]): last_row=row[ks_type]
-
-    perc_writes = 0.0
-    row = {'app':3,'sys':3}
-    column = 13
-    for writes in write_count[ks_type]:
-      perc_writes = float(write_subtotal[ks_type]) / float(total_writes[ks_type])
-      if (perc_writes <= write_threshold):
-        ks = writes['keyspace']
-        tbl = writes['table']
-        cnt = writes['count']
-        try:
-          type(table_totals[ks])
-        except:
-          table_totals[ks] = {}
-        try:
-          type(table_totals[ks][tbl])
-          table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
-        except:
-          table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
-        write_subtotal[ks_type] += cnt
-        worksheet[ks_type].write(row[ks_type],column,ks,data_format)
-        worksheet[ks_type].write(row[ks_type],column+1,tbl,data_format)
-        worksheet[ks_type].write(row[ks_type],column+2,cnt,num_format1)
-        worksheet[ks_type].write(row[ks_type],column+3,float(cnt)/total_uptime,num_format2)
-        worksheet[ks_type].write(row[ks_type],column+4,float(cnt)/total_writes[ks_type],perc_format)
-        worksheet[ks_type].write(row[ks_type],column+5,float(cnt)/float(total_rw[ks_type]),perc_format)
-        row[ks_type]+=1
-
-    if (last_row<row[ks_type]): last_row=row[ks_type]
-    if (last_row<16): last_row=16
-    worksheet[ks_type].merge_range('A'+str(last_row+3)+':D'+str(last_row+3), 'NOTES', title_format2)
-    worksheet[ks_type].merge_range('A'+str(last_row+4)+':D'+str(last_row+4), 'Transaction totals (Reads/Writes) include all nodes (nodetool cfstats)', data_format)
-    worksheet[ks_type].merge_range('A'+str(last_row+5)+':D'+str(last_row+5), 'Log Times (which is used to calculate TPS...) is a sum of the uptimes of all nodes', data_format)
-    worksheet[ks_type].merge_range('A'+str(last_row+6)+':D'+str(last_row+6), '% RW is the Read or Write % of the total reads and writes', data_format)
-    worksheet[ks_type].merge_range('A'+str(last_row+7)+':D'+str(last_row+7), '* TPMO - transactions per month is calculated at 30.4375 days (365.25/12)', data_format)
-
-    reads_tps = total_reads[ks_type]/total_uptime
-    reads_tpd = reads_tps*60*60*24
-    reads_tpmo = reads_tps*60*60*24*365.25/12
-
-    writes_tps = total_writes[ks_type]/total_uptime
-    writes_tpd = writes_tps*60*60*24
-    writes_tpmo = writes_tps*60*60*24*365.25/12
-
-    total_tps = float(total_rw[ks_type])/total_uptime
-    total_tpd = total_tps*60*60*24
-    total_tpmo = total_tps*60*60*24*365.25/12
-    days_uptime = total_uptime/60/60/24
-
-    row=1
-    column=20
-    worksheet[ks_type].write(row+1,column,'Reads',header_format4)
-    worksheet[ks_type].write(row+1,column+1,total_reads[ks_type],num_format3)
-    worksheet[ks_type].write(row+2,column,'Reads Average TPS',header_format3)
-    worksheet[ks_type].write(row+2,column+1,reads_tps,num_format2)
-    worksheet[ks_type].write(row+3,column,'Reads Average TPD',header_format3)
-    worksheet[ks_type].write(row+3,column+1,reads_tpd,num_format1)
-    worksheet[ks_type].write(row+4,column,'Reads Average TPMO*',header_format3)
-    worksheet[ks_type].write(row+4,column+1,reads_tpmo,num_format1)
-    worksheet[ks_type].write(row+5,column,'Reads % RW',header_format3)
-    worksheet[ks_type].write(row+5,column+1,total_reads[ks_type]/float(total_rw[ks_type]),perc_format)
-    worksheet[ks_type].write(row+6,column,'Writes',header_format4)
-    worksheet[ks_type].write(row+6,column+1,total_writes[ks_type],num_format3)
-    worksheet[ks_type].write(row+7,column,'Writes Average TPS',header_format3)
-    worksheet[ks_type].write(row+7,column+1,writes_tps,num_format2)
-    worksheet[ks_type].write(row+8,column,'Writes Average TPD',header_format3)
-    worksheet[ks_type].write(row+8,column+1,writes_tpd,num_format1)
-    worksheet[ks_type].write(row+9,column,'Writes Average TPMO*',header_format3)
-    worksheet[ks_type].write(row+9,column+1,writes_tpmo,num_format1)
-    worksheet[ks_type].write(row+10,column,'Writes % RW',header_format3)
-    worksheet[ks_type].write(row+10,column+1,total_writes[ks_type]/float(total_rw[ks_type]),perc_format)
-    worksheet[ks_type].write(row+11,column,'Total RW (Reads+Writes)',header_format4)
-    worksheet[ks_type].write(row+11,column+1,total_rw[ks_type],num_format3)
-    worksheet[ks_type].write(row+12,column,'Total Log Time (Seconds)',header_format3)
-    worksheet[ks_type].write(row+12,column+1,total_uptime,num_format1)
-    worksheet[ks_type].write(row+13,column,'Total Log Time (Days)',header_format3)
-    worksheet[ks_type].write(row+13,column+1,days_uptime,num_format1)
-    worksheet[ks_type].write(row+14,column,'Total Average TPS',header_format3)
-    worksheet[ks_type].write(row+14,column+1,total_tps,num_format1)
-    worksheet[ks_type].write(row+15,column,'Total Average TPD',header_format3)
-    worksheet[ks_type].write(row+15,column+1,total_tpd,num_format1)
-    worksheet[ks_type].write(row+16,column,'Total Average TPMO*',header_format3)
-    worksheet[ks_type].write(row+16,column+1,total_tpmo,num_format1)
-    worksheet[ks_type].write(row+17,column,ks_type_abbr[ks_type] + ' Data Size (GB)',header_format4)
-    worksheet[ks_type].write(row+17,column+1,total_size[ks_type]/1000000000,num_format3)
-
-    if ks_type=='app':
-      
-      row=1
-      column=0
-      
-      worksheet_chart.merge_range('A1:B1', 'Astra Conversion Info', title_format3)
-      worksheet_chart.set_column(0,0,24)
-      worksheet_chart.set_column(1,1,14)
-      worksheet_chart.write(row,column,'Read Calls per Sec',title_format4)
-      worksheet_chart.write(row,column+1,reads_tps/2,num_format2)
-      worksheet_chart.write(row+1,column,'Read Calls per Month',title_format4)
-      worksheet_chart.write(row+1,column+1,reads_tpmo/2,num_format1)
-      worksheet_chart.write(row+2,column,'Write Calls per Sec',title_format4)
-      worksheet_chart.write(row+2,column+1,writes_tps,num_format2)
-      worksheet_chart.write(row+3,column,'Write Calls per Month',title_format4)
-      worksheet_chart.write(row+3,column+1,writes_tpmo,num_format1)
-      worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
-      worksheet_chart.write(row+4,column+1,astra_size[ks_type]/1000000000,num_format2)
-
-
-    gc_worksheet = workbook.add_worksheet('GC Pauses')
-
-    gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
-
-    gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
-    gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
-
-    prev_dc=0
-    row=0
-    column=0
-    for header in gc_headers:
-      gc_worksheet.write(row,column,header,title_format)
+  column=0
+  for header in wl_headers:
+      if header == '':
+        worksheet.write(2,column,header)
+      else:
+        worksheet.write(2,column,header,header_format1)
       column+=1
 
-    for col_num,col_width in enumerate(gc_widths):
-      gc_worksheet.set_column(col_num,col_num,col_width)
+  row = 3
+  perc_reads = 0.0
+  column = 0
+  for reads in read_count:
+    perc_reads = float(read_subtotal) / float(total_reads)
+    if (perc_reads <= read_threshold):
+      ks = reads['keyspace']
+      tbl = reads['table']
+      cnt = reads['count']
+      try:
+        type(table_totals[ks])
+      except:
+        table_totals[ks] = {}
+      table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
+      read_subtotal += cnt
+      worksheet.write(row,column,ks,data_format)
+      worksheet.write(row,column+1,tbl,data_format)
+      worksheet.write(row,column+2,cnt,num_format1)
+      worksheet.write(row,column+3,float(cnt)/2,num_format1)
+      worksheet.write(row,column+4,float(cnt)/total_uptime,num_format2)
+      worksheet.write(row,column+5,float(cnt)/total_reads,perc_format)
+      worksheet.write(row,column+6,float(cnt)/float(total_rw),perc_format)
+      row+=1
 
-    column=0
-    for name, gc_val in gc_data.items():
-      if(gc_val['Level']=='Cluster'):
-        row+=1
-        for field in gc_fields:
-          if(field=='From'):
-            gc_worksheet.write(row,column,oldest_gc[name]['dt'],data_format)
-          elif(field=='To'):
-            gc_worksheet.write(row,column,newest_gc[name]['dt'])
-          elif(field=='max_gc'):
-            gc_worksheet.write(row,column,max_gc[name])
-          else:
-            gc_worksheet.write(row,column,gc_val[field])
-          column+=1
-        row+=1
-        column=0
+  worksheet.write(row,column,'Total',header_format4)
+  worksheet.write(row,column+2,read_subtotal,num_format1)
+  worksheet.write(row,column+3,read_subtotal/2,num_format1)
+  worksheet.write(row+1,column,'TPS',header_format4)
+  worksheet.write(row+1,column+2,float(read_subtotal)/float(total_uptime),num_format1)
+  worksheet.write(row+1,column+3,float(read_subtotal/2)/float(total_uptime),num_format1)
+  worksheet.write(row+2,column,'TP Month',header_format4)
+  worksheet.write(row+2,column+2,float(read_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet.write(row+2,column+3,float(read_subtotal/2)/float(total_uptime)*60*60*24*365.25/12,num_format1)
 
-    dc_count=0
+  worksheet.write(row+4,column,'Uptime (sec)',header_format4)
+  worksheet.write(row+4,column+1,total_uptime,num_format1)
+  worksheet.write(row+5,column,'Uptime (day)',header_format4)
+  worksheet.write(row+5,column+1,float(total_uptime)/60/60/24,num_format1)
+
+  perc_writes = 0.0
+  row = 3
+  column = 8
+  astra_write_subtotal = 0
+  for writes in write_count:
+    perc_writes = float(write_subtotal) / float(total_writes)
+    if (perc_writes <= write_threshold):
+      ks = writes['keyspace']
+      tbl = writes['table']
+      cnt = writes['count']
+      try:
+        type(table_totals[ks])
+      except:
+        table_totals[ks] = {}
+      try:
+        type(table_totals[ks][tbl])
+        table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
+      except:
+        table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
+      write_subtotal += cnt
+      astra_write_subtotal += float(cnt)/float(tbl_data[ks]['rf'])
+      worksheet.write(row,column,ks,data_format)
+      worksheet.write(row,column+1,tbl,data_format)
+      worksheet.write(row,column+2,cnt,num_format1)
+      worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
+      worksheet.write(row,column+4,float(cnt)/float(tbl_data[ks]['rf']),num_format1)
+      worksheet.write(row,column+5,float(cnt)/total_uptime,num_format2)
+      worksheet.write(row,column+6,float(cnt)/total_writes,perc_format)
+      worksheet.write(row,column+7,float(cnt)/float(total_rw),perc_format)
+      row+=1
+  worksheet.write(row,column,'Total',header_format4)
+  worksheet.write(row,column+2,write_subtotal,num_format1)
+  worksheet.write(row,column+4,astra_write_subtotal,num_format1)
+  worksheet.write(row+1,column,'TPS',header_format4)
+  worksheet.write(row+1,column+2,float(write_subtotal)/float(total_uptime),num_format1)
+  worksheet.write(row+1,column+4,float(astra_write_subtotal)/float(total_uptime),num_format1)
+  worksheet.write(row+2,column,'TP Month',header_format4)
+  worksheet.write(row+2,column+2,float(write_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet.write(row+2,column+4,float(astra_write_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+
+
+  reads_tps = total_reads/total_uptime
+  reads_tpd = reads_tps*60*60*24
+  reads_tpmo = reads_tps*60*60*24*365.25/12
+
+  writes_tps = total_writes/total_uptime
+  writes_tpd = writes_tps*60*60*24
+  writes_tpmo = writes_tps*60*60*24*365.25/12
+
+  astra_writes_tps = astra_total_writes/total_uptime
+  astra_writes_tpd = astra_writes_tps*60*60*24
+  astra_writes_tpmo = astra_writes_tps*60*60*24*365.25/12
+
+  total_tps = float(total_rw)/total_uptime
+  total_tpd = total_tps*60*60*24
+  total_tpmo = total_tps*60*60*24*365.25/12
+  days_uptime = total_uptime/60/60/24
+
+  row=1
+  column=0
+  
+  worksheet_chart.merge_range('A1:B1', 'Astra Conversion Info for '+cluster_name, title_format3)
+  worksheet_chart.set_column(0,0,25)
+  worksheet_chart.set_column(1,1,14)
+  worksheet_chart.write(row,column,'Read Calls per Sec',title_format4)
+  worksheet_chart.write(row,column+1,float(read_subtotal/2)/float(total_uptime),num_format1)
+  worksheet_chart.write(row+1,column,'Read Calls per Month',title_format4)
+  worksheet_chart.write(row+1,column+1,float(read_subtotal/2)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write(row+2,column,'Write Calls per Sec',title_format4)
+  worksheet_chart.write(row+2,column+1,astra_writes_tps,num_format1)
+  worksheet_chart.write(row+3,column,'Write Calls per Month',title_format4)
+  worksheet_chart.write(row+3,column+1,astra_writes_tpmo,num_format1)
+  worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
+  worksheet_chart.write(row+4,column+1,total_set_size/1000000000,num_format2)
+
+  gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
+
+  gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
+  gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
+
+  prev_dc=0
+  row=0
+  column=0
+  for header in gc_headers:
+    gc_worksheet.write(row,column,header,title_format)
+    column+=1
+
+  for col_num,col_width in enumerate(gc_widths):
+    gc_worksheet.set_column(col_num,col_num,col_width)
+
+  column=0
+  for name, gc_val in gc_data.items():
+    if(gc_val['Level']=='Cluster'):
+      row+=1
+      for field in gc_fields:
+        if(field=='From'):
+          gc_worksheet.write(row,column,oldest_gc[name]['dt'],data_format)
+        elif(field=='To'):
+          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+        elif(field=='max_gc'):
+          gc_worksheet.write(row,column,max_gc[name])
+        else:
+          gc_worksheet.write(row,column,gc_val[field])
+        column+=1
+      row+=1
+      column=0
+
+  dc_count=0
+  for name, gc_val in gc_data.items():
+    if(gc_val['Level']=='DC'):
+      dc_count += 1
+      for field in gc_fields:
+        if(field=='From'):
+          gc_worksheet.write(row,column,oldest_gc[name]['dt'])
+        elif(field=='To'):
+          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+        elif(field=='max_gc'):
+          gc_worksheet.write(row,column,max_gc[name])
+        elif(gc_val[field]):
+          gc_worksheet.write(row,column,gc_val[field])
+        column+=1
+
+      row+=1
+      column=0
+
+  for dc_name in dc_list:
     for name, gc_val in gc_data.items():
-      if(gc_val['Level']=='DC'):
-        dc_count += 1
+      node_ip = gc_val['Name']
+      if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
         for field in gc_fields:
-          if(field=='From'):
+          if(field=='Level'):
+            gc_worksheet.write(row,column,node_dc[gc_val['Name']])
+          elif(field=='From'):
             gc_worksheet.write(row,column,oldest_gc[name]['dt'])
           elif(field=='To'):
             gc_worksheet.write(row,column,newest_gc[name]['dt'])
@@ -1062,28 +1076,8 @@ for cluster_url in data_url:
           elif(gc_val[field]):
             gc_worksheet.write(row,column,gc_val[field])
           column+=1
-
         row+=1
         column=0
-
-    for dc_name in dc_list:
-      for name, gc_val in gc_data.items():
-        node_ip = gc_val['Name']
-        if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
-          for field in gc_fields:
-            if(field=='Level'):
-              gc_worksheet.write(row,column,node_dc[gc_val['Name']])
-            elif(field=='From'):
-              gc_worksheet.write(row,column,oldest_gc[name]['dt'])
-            elif(field=='To'):
-              gc_worksheet.write(row,column,newest_gc[name]['dt'])
-            elif(field=='max_gc'):
-              gc_worksheet.write(row,column,max_gc[name])
-            elif(gc_val[field]):
-              gc_worksheet.write(row,column,gc_val[field])
-            column+=1
-          row+=1
-          column=0
 
   worksheet_chart.activate()
   workbook.close()
