@@ -169,9 +169,10 @@ sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','cfstat_f
 
 
 data_url = []
-system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
-wl_headers=['Keyspace','Table','Table Size','','Keyspace','Table','Total Reads','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','Average TPS','% Writes','% RW','','TOTALS']
-wl_headers_width=[14,25,17,3,14,25,17,13,9,9,3,14,25,17,13,9,9,3,25,20]
+system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
+
+wl_headers=['Keyspace','Table','Table Size','Average Record Size','Est. # Records','','Keyspace','Table','Total Reads','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','Average TPS','% Writes','% RW','','TOTALS']
+wl_headers_width=[14,25,17,20,14,3,14,25,17,13,9,9,3,14,25,17,13,9,9,3,25,20]
 ks_type_abbr = {'app':'Application','sys':'System'}
 read_threshold = 1
 write_threshold = 1
@@ -359,6 +360,7 @@ for cluster_url in data_url:
             except:
               print('Error1:' + ks + '.' + tbl + ' - ' + line)
 
+  tbl_row_size = {}
   for node in os.listdir(rootPath):
     ckpath = rootPath + node + '/nodetool'
     if path.isdir(ckpath):
@@ -367,9 +369,8 @@ for cluster_url in data_url:
       keyspace = ''
       table = ''
       dc = ''
-      cfhist = rootPath + node + '/nodetool/cfhistogram'
-      tablehist = rootPath + node + '/nodetool/tablehistogram'
-      tblhist = 0
+      cfhistpath = rootPath + node + '/nodetool/cfhistograms'
+      tblhistpath = rootPath + node + '/nodetool/tablehistograms'
       cfstat = rootPath + node + '/nodetool/cfstats'
       tablestat = rootPath + node + '/nodetool/tablestats'
       clusterpath = rootPath + node + '/nodetool/describecluster'
@@ -377,18 +378,47 @@ for cluster_url in data_url:
 
       if (cluster_name == ''):
         cluster_name = get_param(clusterpath,'Name:',1)
-        
-#      try:
-#        cfhistFile = open(cfhist, 'r')
-#      except:
-#        cfhistFile = open(tablehist, 'r')
 
-      try:
-        cfstatFile = open(cfstat, 'r')
-      except:
-        cfstatFile = open(tablestat, 'r')
+      if(path.isfile(cfhistpath)):
+        cfhistFile = open(cfhistpath, 'r')
+        tblhist = 1
+      elif(path.isfile(tblhistpath)):
+        cfhistFile = open(tblhistpath, 'r')
+        tblhist = 1
+      else:
+        tblhist = 0
 
-
+      if (tblhist==1):
+        ks = ''
+        tbl = ''
+        is_tbl_data = 0
+        for line in cfhistFile:
+          line = line.strip('\n').strip()
+          if (line==''):
+            tbl = ''
+            is_tbl_data = 0
+          elif ('No SSTables exists' in line):
+            is_tbl_data = 0
+          if('/' in line):
+            ks = line.split('/')[0].strip()
+            if (ks not in system_keyspace):
+              try:
+                type(tbl_row_size[ks])
+              except:
+                tbl_row_size[ks] = {}
+              tbl = line.split()[0].split('/')[1].strip()
+              is_tbl_data = 1
+              try:
+                type(tbl_row_size[ks][tbl])
+              except:
+                tbl_row_size[ks][tbl] = 0
+          if ('%' in line and is_tbl_data == 1 and ks not in system_keyspace):
+            per = float(line.split()[0].strip().strip('%'))
+            part_size = float(line.split()[4])
+            cell_count = float(line.split()[5])
+            num_fields = float(len(tbl_data[ks][tbl]['field']))
+            tbl_row_size[ks][tbl] += (100-per)/100 * (part_size/(cell_count/num_fields)) / tbl_data[ks]['rf']
+            
       try:
         cfstatFile = open(cfstat, 'r')
       except:
@@ -405,9 +435,8 @@ for cluster_url in data_url:
         else:
           if('Keyspace' in line):
             ks = line.split(':')[1].strip()
-            ks_type=''
-            if (ks in ks_array['app']): ks_type = 'app'
-            elif (ks in ks_array['sys']): ks_type = 'sys'
+            ks_type='app'
+            if (ks in system_keyspace): ks_type = 'sys'
           elif (ks_type<>''):
             if('Table: ' in line):
               tbl = line.split(':')[1].strip()
@@ -416,22 +445,27 @@ for cluster_url in data_url:
               tbl = line.split(':')[1].strip()
               is_index = 1
             if(tbl<>''):
-              if ('Space used (live): ' in line):
+              if ('Space used (total):' in line):
                 tsize = float(line.split(':')[1].strip())
-                if (tsize > 0):
+                if (tsize):
                   total_size[ks_type] += tsize
                   # astra pricing will be based on data on one set of data
                   # divide the total size by the total rf (gives the size per node)
-                  astra_size[ks_type] += tsize / tbl_data[ks]['rf']
+                  try:
+                    astra_size[ks_type] += tsize / tbl_data[ks]['rf']
+                  except:
+                    tbl_data[ks] = {}
+                    tbl_data[ks]['rf'] = float(1)
+                    astra_size[ks_type] += tsize / tbl_data[ks]['rf']
                   try:
                     type(size_table[ks_type][ks])
                   except:
                     size_table[ks_type][ks] = {}
                   try:
                     type(size_table[ks_type][ks][tbl])
-                    size_table[ks_type][ks][tbl] += tsize
+                    size_table[ks_type][ks][tbl] += tsize / tbl_data[ks]['rf']
                   except:
-                    size_table[ks_type][ks][tbl] = tsize
+                    size_table[ks_type][ks][tbl] = tsize / tbl_data[ks]['rf']
               if('Local read count: ' in line):
                 count = int(line.split(':')[1].strip())
                 if (count > 0):
@@ -459,7 +493,6 @@ for cluster_url in data_url:
                       write_table[ks][tbl] += count
                     except:
                       write_table[ks][tbl] = count
-
   
   for ks,readtable in read_table.items():
     if ks not in system_keyspace and ks != '': ks_type='app'
@@ -497,7 +530,8 @@ for cluster_url in data_url:
   for node in os.listdir(rootPath):
     systemlogpath = rootPath + node + '/logs/cassandra/'
     systemlog = systemlogpath + 'system.log'
-    jsppath = rootPath + node + '/java_system_properties.json'
+    jsppath1 = rootPath + node + '/java_system_properties.json'
+    jsppath2 = rootPath + node + '/java_system_properties.txt'
     infopath = rootPath + node + '/nodetool/info'
     if(path.exists(systemlog)):
       statuspath = rootPath + node + '/nodetool/status'
@@ -510,7 +544,11 @@ for cluster_url in data_url:
       newest_gc[node]={'jd':0.0,'dt':''}
       oldest_gc[node]={'jd':99999999999.9,'dt':''}
       max_gc[node]=''
-      tz[node] = get_param(jsppath,'user.timezone',2).strip(',').strip('"')
+      tz[node]='UTC'
+      if (path.isfile(jsppath1)):
+        tz[node] = get_param(jsppath1,'user.timezone',2).strip(',').strip('"')
+      elif (path.isfile(jsppath2)):
+        tz[node] = get_param(jsppath2,'user.timezone',0).strip('user.timezone=')
       if (tz[node]=='Default'): tz[node] = 'UTC'
       
       for logfile in os.listdir(systemlogpath):
@@ -806,11 +844,11 @@ for cluster_url in data_url:
           prev_nodes.append(nodeid)
 
   for ks_type in ks_type_array:
-    worksheet[ks_type].merge_range('A1:T1', 'Workload for '+cluster_name, title_format3)
-    worksheet[ks_type].merge_range('A2:C2', 'Table Size', title_format)
-    worksheet[ks_type].merge_range('E2:J2', 'Reads', title_format)
-    worksheet[ks_type].merge_range('L2:Q2', 'Writes', title_format)
-    worksheet[ks_type].merge_range('S2:T2', 'Totals', title_format)
+    worksheet[ks_type].merge_range('A1:V1', 'Workload for '+cluster_name, title_format3)
+    worksheet[ks_type].merge_range('A2:E2', 'Table Size', title_format)
+    worksheet[ks_type].merge_range('G2:L2', 'Reads', title_format)
+    worksheet[ks_type].merge_range('N2:S2', 'Writes', title_format)
+    worksheet[ks_type].merge_range('U2:V2', 'Totals', title_format)
 
   for ks_type in ks_type_array:
     column=0
@@ -829,16 +867,26 @@ for cluster_url in data_url:
     column = 0
     for ks,t_data in size_table[ks_type].items():
       for tbl,t_size in t_data.items():
+        
         worksheet[ks_type].write(row[ks_type],column,ks,data_format)
         worksheet[ks_type].write(row[ks_type],column+1,tbl,data_format)
         worksheet[ks_type].write(row[ks_type],column+2,t_size,num_format1)
+        try:
+          worksheet[ks_type].write(row[ks_type],column+3,tbl_row_size[ks][tbl],num_format1)
+        except:
+          worksheet[ks_type].write(row[ks_type],column+3,"no data",num_format1)
+        try:
+          worksheet[ks_type].write(row[ks_type],column+4,t_size/tbl_row_size[ks][tbl],num_format1)
+        except:
+          worksheet[ks_type].write(row[ks_type],column+4,"no data",num_format1)
+
         row[ks_type]+=1
 
     last_row = row[ks_type]
 
     row = {'app':3,'sys':3}
     perc_reads = 0.0
-    column = 4
+    column = 6
     for reads in read_count[ks_type]:
       perc_reads = float(read_subtotal[ks_type]) / float(total_reads[ks_type])
       if (perc_reads <= read_threshold):
@@ -863,7 +911,7 @@ for cluster_url in data_url:
 
     perc_writes = 0.0
     row = {'app':3,'sys':3}
-    column = 11
+    column = 13
     for writes in write_count[ks_type]:
       perc_writes = float(write_subtotal[ks_type]) / float(total_writes[ks_type])
       if (perc_writes <= write_threshold):
@@ -910,7 +958,7 @@ for cluster_url in data_url:
     days_uptime = total_uptime/60/60/24
 
     row=1
-    column=18
+    column=20
     worksheet[ks_type].write(row+1,column,'Reads',header_format4)
     worksheet[ks_type].write(row+1,column+1,total_reads[ks_type],num_format3)
     worksheet[ks_type].write(row+2,column,'Reads Average TPS',header_format3)
@@ -1037,10 +1085,8 @@ for cluster_url in data_url:
           row+=1
           column=0
 
-
-
-
   worksheet_chart.activate()
   workbook.close()
+  print('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'
 exit();
 
