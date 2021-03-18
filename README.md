@@ -6,7 +6,7 @@
 * [Summary](#summary)
 * [Script Origins](#origins-of-the-code)
 * [Getting Started](#getting-started)
-* [Using the Cluster Load Spreadsheet](#using-the-cluster-load-spreadsheet)
+* [Creating the Spreadsheet](#using-the-cluster-load-spreadsheet)
 
 <!-- SUMMARY -->
 ## Summary
@@ -72,7 +72,7 @@ After cloning this project, download a diagnostic tarball from a targeted Cassan
 
 ### Commands and Arguments
 
-#### Creating the Cluster Load Spreadsheet
+#### Creating the Spreadsheet
 To create the spreadsheet run the following command:
 ```
 python look.py -p [path_to_diag_folder]
