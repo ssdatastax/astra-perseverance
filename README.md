@@ -22,27 +22,34 @@ Workload
  * Percentage of R/W of total R,W and RW load (Table)
  * Percentage of R/W of total RW load (Cluster)
  * RF (Keyspace/Table) 
- Notes:
+
+Notes:
   R-Read; W-Write; W/R-Read and Write; WR-Read+Write; TPS-Transactions per Second; TPMO-Transactions per Month; RF-Replication Factor
   Transactions include the replication factor. I.E. A single write call will have the number of transactions as the RF.
   Write Calls are the number of write transactions divided by the RF
   Read Calls assumes a consistancy level of LOCAL QUORUM (with overall RF3) and therefore is the number of read transactions divided by 2
+
 Data Size
  * Data Size (Cluster/Table)
  * RF (Keyspace/Table)
  * Data Set Size (Cluster/Table)
  * Estimated Average Row Size (Table)
  * Estimated Row Rount (Table)
+
 GC Pauses
  * Count (Cluster/DC/Node)
  * Max/Min/P99/P98/P95/P75/P50 (Cluster/DC/Node)
  * From/To/Max Date/Time
+
 Node Data
  * Load/Tokens/Rack
+
 Node R/W Latency Proxihistogram
  * P99/P98/P95/P75/P50
+
 Dropped Mutations
  * Count (Node/DC/Keyspace/Table)
+
 Table Count per DC
 Wide Partitions (over 100 MB)
 SSTable Count (over 15)
