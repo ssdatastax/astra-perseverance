@@ -50,11 +50,11 @@ Node R/W Latency Proxihistogram
 Dropped Mutations
  * Count (Node/DC/Keyspace/Table)
 
-Table Count per DC
-Wide Partitions (over 100 MB)
-SSTable Count (over 15)
-Read Latency (over 5ms)
-Write LAtency (over 1ms)
+Table Count per DC;
+Wide Partitions (over 100 MB);
+SSTable Count (over 15);
+Read Latency (over 5ms);
+Write LAtency (over 1ms);
 Tombstones (Future version)
 
 
