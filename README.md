@@ -70,6 +70,17 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 Install xlsxwriter and Pandas
 
 After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
+Note: If you are using the Cassandra Diagnostic Collection tool, it is easiest to collect a complete cluster diag tarball at once using:
+```
+./collect_diag.sh -t dse -f mhosts -r -s \
+  "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
+```
+or for open source cassandra:
+```
+./collect_diag.sh -t oss -f mhosts -r -s \
+  "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
+```
+mhost is a file with a list of nodes (one per line)
 
 ### Commands and Arguments
 
