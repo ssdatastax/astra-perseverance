@@ -17,17 +17,9 @@ This script extracts and organizes key information from diagnostic files from th
 Workload 
  * R/W TPS (Cluster/Table)
  * R/W TPMO (Cluster)
- * Estimated R/W Calls per Second (Cluster/Table)
- * Estimated R/W Calls per Month (Table)
  * Percentage of R/W of total R,W and RW load (Table)
  * Percentage of R/W of total RW load (Cluster)
  * RF (Keyspace/Table) 
-
-Notes:
-  R-Read; W-Write; W/R-Read and Write; WR-Read+Write; TPS-Transactions per Second; TPMO-Transactions per Month; RF-Replication Factor
-  Transactions include the replication factor. I.E. A single write call will have the number of transactions as the RF.
-  Write Calls are the number of write transactions divided by the RF
-  Read Calls assumes a consistancy level of LOCAL QUORUM (with overall RF3) and therefore is the number of read transactions divided by 2
 
 Data Size
  * Data Size (Cluster/Table)
