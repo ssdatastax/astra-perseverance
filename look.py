@@ -3,7 +3,16 @@
 #pip install xlsxwriter
 #pip install Pandas
 
-# get the dc name for each node
+import os.path
+from os import path
+import xlsxwriter
+import sys
+import pandas as pd
+import datetime
+import re
+import zipfile
+
+# collect the dc name for each node
 def get_dc(statuspath):
   if(path.exists(statuspath)):
     statusFile = open(statuspath, 'r')
@@ -22,9 +31,9 @@ def get_dc(statuspath):
         node = str(line.split()[1].strip())
         node_dc[node] = dc
   else:
-    exit('ERROR: No Status File - ' + statuspath)
+    exclude_tab.append('node')
 
-# parse the system.log for the GC info
+# collect GC info from system.log
 def parseGC(node,systemlog,systemlogpath):
   if(zipfile.is_zipfile(systemlog)):
     zf = zipfile.ZipFile(systemlog, 'r')
@@ -53,7 +62,7 @@ def parseGC(node,systemlog,systemlogpath):
       if(oldest_gc[node]['jd']>log_jd): oldest_gc[node]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(max(node_gcpause[node])==int(gcpause)): max_gc[node]= ldatetime
 
-# print the GC percentage
+# organize the GC pauses into percentage
 def get_gc_data(level,name,gcpause,is_node):
     gcpause.sort()
     gcnum=len(gcpause)
@@ -87,16 +96,18 @@ def get_gc_data(level,name,gcpause,is_node):
       gc_data[name].update({'P99':'N/A'})
       gc_data[name].update({'Max':'N/A'})
 
+# sort array
 def sortFunc(e):
   return e['count']
 
+# write data on spreadsheet
 def write_row(sheet_name,row_data,d_format,blank_col=[]):
   for col_num,data in enumerate(row_data):
     if col_num not in blank_col:
       stats_sheets[sheet_name].write(row[sheet_name],col_num, data, d_format)
   row[sheet_name]+=1
 
-# get param value
+# collect targeted value in a log file
 def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
   if(path.exists(filepath)):
     fileData = open(filepath, 'r')
@@ -116,46 +127,8 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
   else:
     exit('ERROR: No File: ' + filepath)
 
-import os.path
-from os import path
-import xlsxwriter
-import sys
-import pandas as pd
-import datetime
-import re
-import zipfile
 
-
-def schemaTag(writeFile,tagType,level,ks,tbl,cql):
-  writeFile.writelines(['  - tags:\n','      phase: '+tagType+'_'+level+'_'+ks])
-  if level == 'table':
-    writeFile.write('_'+tbl)
-  writeFile.writelines(['\n','    statements:\n','      - |\n        '+cql+'\n\n'])
-
-def rwTag(writeFile,rwCQL,ks,tbl,tbl_info,ratio='n'):
-  if ratio == 'n':
-    writeFile.writelines(['  - tags:\n','      phase: '+rwCQL+'_'+ks+'_'+tbl+'\n'])
-  elif ratio == 'y':
-    writeFile.writelines(['  - tags:\n','      phase: load_'+rwCQL+'_'+ks+'_'+tbl+'\n'])
-    ratio_val = str(int(tbl_info['ratio'][rwCQL]*1000))
-    writeFile.writelines(['    params:\n','      ratio: ',ratio_val,'\n'])
-  writeFile.writelines(['    statements:\n','      - |\n        '])
-  field_array = []
-  join_info = '},{'+ks+'_'+tbl+'_'
-  if rwCQL == 'read':
-    cql = 'SELECT * FROM '+ks+'.'+tbl+' WHERE '
-    for fld_name,fld_type in tbl_info['field'].items():
-      if (fld_name in tbl_info['pk']):
-        field_array.append(fld_name+'={'+ks+'_'+tbl+'_'+fld_name+'}')
-    field_info = ' AND '.join(map(str, field_array))
-    writeFile.write(cql+field_info+'\n\n')
-  elif rwCQL == 'write':
-    field_array = tbl_info['field'].keys()
-    field_names =  ','.join(map(str, field_array))
-    field_values =  join_info.join(map(str, field_array))
-    cql = 'INSERT INTO '+ks+'.'+tbl+' ('+field_names+') VALUES ({'+ks+'_'+tbl+'_'+field_values+'})'
-    writeFile.write(cql+'\n\n')
-
+# Organize primary support tab information
 sheets_data = []
 sheets_data.append({'sheet_name':'node','tab_name':'Node Data','cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0})
@@ -167,14 +140,14 @@ sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','cfstat_fi
 sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'ms','extra':0})
 #sheets_data.append({'sheet_name':'ts','tab_name':'Tombstones','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'extra':0})
 
-
-data_url = []
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
-
 ks_type_abbr = {'app':'Application','sys':'System'}
+
+
+# initialize script variables
+data_url = []
 read_threshold = 1
 write_threshold = 1
-include_yaml = 0
 new_dc = ''
 show_help = ''
 include_system = 0
@@ -182,15 +155,14 @@ log_df = '%Y-%m-%d %H:%M:%S'
 dt_fmt = '%m/%d/%Y %I:%M%p'
 tz = {}
 
+# collect and analyze command line arguments
 for argnum,arg in enumerate(sys.argv):
   if(arg=='-h' or arg =='--help'):
     show_help = 'y'
   elif(arg=='-p'):
     data_url.append(sys.argv[argnum+1])
 
-if (include_system): ks_type_array=['app','sys']
-else: ks_type_array=['app']
-
+# communicate command line help
 if show_help:
   help_content = \
   'usage: look.py [-h] [--help] [-inc_yaml]\n'\
@@ -206,7 +178,10 @@ if show_help:
 
   exit(help_content)
 
+# run through each cluster diag file path listed in command line
 for cluster_url in data_url:
+
+  # initialize cluster vaariables
   cluster_name=''
   is_index = 0
   read_subtotal = 0
@@ -253,10 +228,11 @@ for cluster_url in data_url:
   newest_gc = {}
   oldest_gc = {}
   max_gc = {}
+  exclude_tab = []
 
   rootPath = cluster_url + '/nodes/'
 
-  # gather dc info
+  # collect dc info
   for node in os.listdir(rootPath):
     ckpath = rootPath + node + '/nodetool'
     if path.isdir(ckpath):
@@ -269,9 +245,10 @@ for cluster_url in data_url:
         schemaFile = open(schemapath + '/schema', 'r')
       except:
         exit('Error: No schema file - ' + schemapath + '/schema')
+    elif:
+      exit('Error: No schema file - ' + schemapath + '/schema')
 
-
-  # gather schema
+  # collect and analyze schema
   ks = ''
   for node in os.listdir(rootPath):
     if (ks==''):
@@ -344,10 +321,13 @@ for cluster_url in data_url:
             except:
               print('Error1:' + ks + '.' + tbl + ' - ' + line)
 
+  # begin looping through each node and collect node info
   tbl_row_size = {}
   for node in os.listdir(rootPath):
     ckpath = rootPath + node + '/nodetool'
     if path.isdir(ckpath):
+      
+      # initialize node variables
       iodata = {}
       iodata[node] = {}
       keyspace = ''
@@ -360,6 +340,7 @@ for cluster_url in data_url:
       clusterpath = rootPath + node + '/nodetool/describecluster'
       infopath = rootPath + node + '/nodetool/info'
 
+      #collect cluster name
       if (cluster_name == ''):
         cluster_name = get_param(clusterpath,'Name:',1)
 
@@ -372,6 +353,7 @@ for cluster_url in data_url:
       else:
         tblhist = 0
 
+      # collect row data sizes from cfhistograms
       if (tblhist==1):
         ks = ''
         tbl = ''
@@ -403,6 +385,7 @@ for cluster_url in data_url:
             num_fields = float(len(tbl_data[ks][tbl]['field']))
             tbl_row_size[ks][tbl] += (100-per)/100 * (part_size/(cell_count/num_fields)) / tbl_data[ks]['rf']
             
+      # collect and analyze uptime and R/W counts from cfstats
       try:
         cfstatFile = open(cfstat, 'r')
       except:
@@ -480,10 +463,10 @@ for cluster_url in data_url:
                     except:
                       write_table[ks][tbl] = count
   
+  # total up R/W across all nodes
   for ks,readtable in read_table.items():
     for tablename,tablecount in readtable.items():
       read_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
-
   for ks,writetable in write_table.items():
     for tablename,tablecount in writetable.items():
       try:
@@ -494,10 +477,13 @@ for cluster_url in data_url:
         astra_write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
         write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
 
+  # sort R/W data
   read_count.sort(reverse=True,key=sortFunc)
   write_count.sort(reverse=True,key=sortFunc)
   total_rw = total_reads+total_writes
   
+
+  #initialize GC variables
   cluster_gcpause = []
   node_dc = {}
   dc_list = []
@@ -509,9 +495,8 @@ for cluster_url in data_url:
   newest_gc = {}
   oldest_gc = {}
   max_gc = {}
-
   
-  # Get GC Data
+  # collect GC Data
   rootPath = cluster_url + '/nodes/'
   for node in os.listdir(rootPath):
     systemlogpath = rootPath + node + '/logs/cassandra/'
@@ -544,7 +529,7 @@ for cluster_url in data_url:
           parseGC(cor_node,systemlog,systemlogpath)
 
 
-  # Additional log path
+  # collect GC data from additional log path
   addlogs = './AdditionalLogs'
   if(path.exists(addlogs)):
     for node in os.listdir(addlogs):
@@ -558,7 +543,7 @@ for cluster_url in data_url:
             cor_node = node.replace('-','.')
             parseGC(cor_node,systemlog,systemlogpath)
 
-  #cluster GC Percents
+  #collect cluster GC Percents
   get_gc_data('Cluster',cluster_name,cluster_gcpause,0)
 
   for dc, dc_pause in dc_gcpause.items():
@@ -583,7 +568,8 @@ for cluster_url in data_url:
   ds_worksheet = workbook.add_worksheet('Data Size')
   gc_worksheet = workbook.add_worksheet('GC Pauses')
   for sheet_array in sheets_data:
-    stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
+    if (sheet_array['sheet_name'] not in exclude_tab):
+      stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
 
 
   # Create Formats
@@ -763,9 +749,10 @@ for cluster_url in data_url:
 
         for sheet_array in sheets_data:
 #          stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
-          headers[sheet_array['sheet_name']] = sheet_array['headers']
-          col_widths[sheet_array['sheet_name']] = sheet_array['widths']
-          sheets_record[sheet_array['sheet_name']]={}
+          if (sheet_array['sheet_name'] not in exclude_tab):
+            headers[sheet_array['sheet_name']] = sheet_array['headers']
+            col_widths[sheet_array['sheet_name']] = sheet_array['widths']
+            sheets_record[sheet_array['sheet_name']]={}
 
         for sheet_name,sheet_obj in stats_sheets.items():
           if (sheet_name == 'ph'):
@@ -781,19 +768,16 @@ for cluster_url in data_url:
             sheet_obj.set_column(col_num,col_num,col_width)
           row[sheet_name]+=1
 
-
-      keyspace = ''
-      table = ''
+      # collect dc name
       dc = ''
-
       info = rootPath + node + '/nodetool/info'
       infoFile = open(info, 'r')
       for line in infoFile:
         if('Data Center' in line):
           dc = line.split(':')[1].strip()
 
+      # collect node data
       if(node_status):
-        proxyhistData[node] = []
         status = rootPath + node + '/nodetool/status'
         statusFile = open(status, 'r')
         
@@ -806,6 +790,9 @@ for cluster_url in data_url:
             write_row('node',row_data,data_format)
             node_status=0
 
+      # collect data from the cfstats log file
+      keyspace = ''
+      table = ''
       cfstat = rootPath + node + '/nodetool/cfstats'
       cfstatFile = open(cfstat, 'r')
       for line in cfstatFile:
@@ -819,38 +806,42 @@ for cluster_url in data_url:
           row_data = [node,dc,keyspace,table,header,value]
  
           for sheet_array in sheets_data:
-            if(sheet_array['cfstat_filter'] and sheet_array['cfstat_filter'] in line):
-              value = line.split(':')[1].strip()
-              row_data = [node,dc,keyspace,table,value]
-              if (sheet_array['filter_type']):
-                value = value.strip(sheet_array['strip'])
-                if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
-                  if(sheet_array['sheet_name']=='partition'):
-                    row_data[4] = str(int(value)/1000000)
-                  if(sheet_array['extra']):
-                    sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
-                    row[sheet_array['sheet_name']]+=1
-                  else:
-                    write_row(sheet_array['sheet_name'],row_data,data_format)
-              else:
-                write_row(sheet_array['sheet_name'],row_data,data_format)
+            if (sheet_array['sheet_name'] not in exclude_tab):
+              if(sheet_array['cfstat_filter'] and sheet_array['cfstat_filter'] in line):
+                value = line.split(':')[1].strip()
+                row_data = [node,dc,keyspace,table,value]
+                if (sheet_array['filter_type']):
+                  value = value.strip(sheet_array['strip'])
+                  if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
+                    if(sheet_array['sheet_name']=='partition'):
+                      row_data[4] = str(int(value)/1000000)
+                    if(sheet_array['extra']):
+                      sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
+                      row[sheet_array['sheet_name']]+=1
+                    else:
+                      write_row(sheet_array['sheet_name'],row_data,data_format)
+                else:
+                  write_row(sheet_array['sheet_name'],row_data,data_format)
 
+      # organize key data
       key_record = {}
       key_data = {}
       for sheet_array in sheets_data:
-        if(sheet_array['extra']):
-          row[sheet_array['sheet_name']]=1
-          for record_num,record in sheets_record[sheet_array['sheet_name']].items():
-            new_key = sheet_array['sheet_name']+'_'+record[2]+'_'+record[3]
-            if hasattr(key_record,new_key) :
-              if(key_record[new_key] < record[4]):
+        if (sheet_array['sheet_name'] not in exclude_tab):
+          if(sheet_array['extra']):
+            row[sheet_array['sheet_name']]=1
+            for record_num,record in sheets_record[sheet_array['sheet_name']].items():
+              new_key = sheet_array['sheet_name']+'_'+record[2]+'_'+record[3]
+              if hasattr(key_record,new_key) :
+                if(key_record[new_key] < record[4]):
+                  key_record[new_key] = record[4]
+                  key_data[new_key] = record
+              else:
                 key_record[new_key] = record[4]
                 key_data[new_key] = record
-            else:
-              key_record[new_key] = record[4]
-              key_data[new_key] = record
-#      exit(key_data)
 
+      # collect node R/W latency data - coordinator level latencies
+      proxyhistData[node] = []
       proxyhist = rootPath + node + '/nodetool/proxyhistograms'
       proxyhistFile = open(proxyhist, 'r')
       proxyhistData[node] = {'99%':[],'98%':[],'95%':[],'75%':[],'50%':[]}
@@ -875,7 +866,7 @@ for cluster_url in data_url:
           write_row('ph',row_data,data_format,[6])
           prev_nodes.append(nodeid)
 
-  # Create Workload Tab
+  # create workload tab
   wl_headers=['Keyspace','Table','Total Reads','Read Calls','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','RF','Write Calls','Average TPS','% Writes','% RW']
   wl_headers_width=[14,25,17,13,13,9,9,3,14,25,17,4,17,13,9,9]
 
