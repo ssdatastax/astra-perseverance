@@ -152,10 +152,10 @@ ks_type_abbr = {'app':'Application','sys':'System'}
 comments = [
 {
 'fields':['Read Calls per Sec'],
-'comment':["Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime."]
+'comment':["Read Calls are calculated by the number of reads divided by 2 assuming a read CL (consistancy level) of LOCAL_QUORUM and RF (replication factor) of 3. The time is determined by the node's uptime."]
 },{
 'fields':['Read Calls per Month'],
-'comment':["Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime. Month is calculated as 365.25/12"]
+'comment':["Read Calls are calculated by the number of reads divided by 2 assuming a read CL (consistancy level) of LOCAL_QUORUM and RF (replication factor) of 3. The time is determined by the node's uptime. Month is calculated as 365.25/12"]
 },{
 'fields':['Write Calls per Sec'],
 'comment':["Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The time is determined by the node's uptime."]
@@ -194,10 +194,10 @@ comments = [
 'comment':["The table's read or write count divided by the uptime."]
 },{
 'fields':['Read TPS'],
-'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime."]
+'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming a read CL (consistancy level) of LOCAL_QUORUM and RF (replication factor) of 3. The time is determined by the node's uptime."]
 },{
 'fields':['Read TP Month'],
-'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The month is calculated at 365.25/12 days."]
+'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming a read CL (consistancy level) of LOCAL_QUORUM and RF (replication factor) of 3. The month is calculated at 365.25/12 days."]
 },{
 'fields':['Write TPS'],
 'comment':["The cluster's total write TPS or write call TPS. Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The time is determined by the node's uptime."]
@@ -209,10 +209,10 @@ comments = [
 'comment':["The combined uptime of all nodes in the cluster"]
 },{
 'fields':['Total R % RW'],
-'comment':["The total read percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM) and a write call creates the total RF (Replication Factor) number of writes."]
+'comment':["The total read percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM and local DC RF of 3) and a write call creates the total RF (Replication Factor) number of writes."]
 },{
 'fields':['Total W % RW'],
-'comment':["The total write percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM) and a write call creates the total RF (Replication Factor) number of writes."]
+'comment':["The total write percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM and local DC RF of 3) and a write call creates the total cluster RF (Replication Factor) number of writes."]
 }
 ]
 
