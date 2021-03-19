@@ -67,6 +67,7 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 
 <!-- GETTING STARTED -->
 ## Getting Started
+Install xlsxwriter and Pandas
 
 After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
 
