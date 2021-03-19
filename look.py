@@ -245,7 +245,7 @@ for cluster_url in data_url:
         schemaFile = open(schemapath + '/schema', 'r')
       except:
         exit('Error: No schema file - ' + schemapath + '/schema')
-    elif:
+    else:
       exit('Error: No schema file - ' + schemapath + '/schema')
 
   # collect and analyze schema
