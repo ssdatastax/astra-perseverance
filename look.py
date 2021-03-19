@@ -12,6 +12,12 @@ import datetime
 import re
 import zipfile
 
+# write comment on worksheet field
+def write_cmt(wksht,coord,title,vis=0):
+  for cmt_array in comments:
+    if title in cmt_array['fields']:
+      wksht.write_comment(coord,cmt_array['comment'][0],{'visible':vis,'font_size': 12,'x_scale': 2,'y_scale': 2})
+
 # collect the dc name for each node
 def get_dc(statuspath):
   if(path.exists(statuspath)):
@@ -143,6 +149,73 @@ sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','cfstat_f
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
 ks_type_abbr = {'app':'Application','sys':'System'}
 
+comments = [
+{
+'fields':['Read Calls per Sec'],
+'comment':["Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime."]
+},{
+'fields':['Read Calls per Month'],
+'comment':["Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime. Month is calculated as 365.25/12"]
+},{
+'fields':['Write Calls per Sec'],
+'comment':["Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The time is determined by the node's uptime."]
+},{
+'fields':['Write Calls per Month'],
+'comment':["Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The time is determined by the node's uptime. Month is calculated as 365.25/12"]
+},{
+'fields':['Data Size (GB)'],
+'comment':["Data Size is a single set of complete data.  It does not include replication data across the cluster"]
+},{
+'fields':['Read Calls'],
+'comment':["Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM."]
+},{
+'fields':['Write Calls'],
+'comment':["Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition."]
+},{
+'fields':['Total Reads'],
+'comment':["Total reads across all nodes during each node's uptime."]
+},{
+'fields':['Total Writes'],
+'comment':["Total writes across all nodes during each node's uptime."]
+},{
+'fields':['% Reads'],
+'comment':["The table's pecentage of the total reads in the cluster."]
+},{
+'fields':['% Writes'],
+'comment':["The table's pecentage of the total writes in the cluster."]
+},{
+'fields':['R % RW'],
+'comment':["The table's pecentage of reads of the total reads and writes in the cluster. The total row shows the total read percentage of the cluster."]
+},{
+'fields':['W % RW'],
+'comment':["The table's pecentage of writes of the total reads and writes in the cluster. The total row shows the total write percentage of the cluster."]
+},{
+'fields':['Average TPS'],
+'comment':["The table's read or write count divided by the uptime."]
+},{
+'fields':['Read TPS'],
+'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The time is determined by the node's uptime."]
+},{
+'fields':['Read TP Month'],
+'comment':["The cluster's total read TPS or read call TPS. Read Calls are calculated by the number of reads divided by 2 assuming all reads have a consistancy level of LOCAL_QUORUM. The month is calculated at 365.25/12 days."]
+},{
+'fields':['Write TPS'],
+'comment':["The cluster's total write TPS or write call TPS. Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The time is determined by the node's uptime."]
+},{
+'fields':['Write TP Month'],
+'comment':["The cluster's total write TPS or write call TPS. Write Calls are calculated by the number of writes divided by the total replication factor across all of the DCs included in the keyspace definition. The month is calculated at 365.25/12 days."]
+},{
+'fields':['Uptime (sec)','Uptime (day)'],
+'comment':["The combined uptime of all nodes in the cluster"]
+},{
+'fields':['Total R % RW'],
+'comment':["The total read percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM) and a write call creates the total RF (Replication Factor) number of writes."]
+},{
+'fields':['Total W % RW'],
+'comment':["The total write percentage of the cluster. Note: If the application is producing 50% reads and 50% writes, it will translate to a higher total write percentage because typically a read call creates 2 reads (based on Read CL of LOCAL_QUORUM) and a write call creates the total RF (Replication Factor) number of writes."]
+}
+]
+
 
 # initialize script variables
 data_url = []
@@ -245,8 +318,6 @@ for cluster_url in data_url:
         schemaFile = open(schemapath + '/schema', 'r')
       except:
         exit('Error: No schema file - ' + schemapath + '/schema')
-    else:
-      exit('Error: No schema file - ' + schemapath + '/schema')
 
   # collect and analyze schema
   ks = ''
@@ -748,7 +819,6 @@ for cluster_url in data_url:
         cluster_name = get_param(clusterpath,'Name:',1)
 
         for sheet_array in sheets_data:
-#          stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
           if (sheet_array['sheet_name'] not in exclude_tab):
             headers[sheet_array['sheet_name']] = sheet_array['headers']
             col_widths[sheet_array['sheet_name']] = sheet_array['widths']
@@ -867,7 +937,7 @@ for cluster_url in data_url:
           prev_nodes.append(nodeid)
 
   # create workload tab
-  wl_headers=['Keyspace','Table','Total Reads','Read Calls','Average TPS','% Reads','% RW','','Keyspace','Table','Total Writes','RF','Write Calls','Average TPS','% Writes','% RW']
+  wl_headers=['Keyspace','Table','Total Reads','Read Calls','Average TPS','% Reads','R % RW','','Keyspace','Table','Total Writes','RF','Write Calls','Average TPS','% Writes','W % RW']
   wl_headers_width=[14,25,17,13,13,9,9,3,14,25,17,4,17,13,9,9]
 
   column=0
@@ -885,6 +955,7 @@ for cluster_url in data_url:
         worksheet.write(2,column,header)
       else:
         worksheet.write(2,column,header,header_format1)
+        write_cmt(worksheet,chr(ord('@')+column+1)+'3',header)
       column+=1
 
   row = 3
@@ -910,20 +981,27 @@ for cluster_url in data_url:
       worksheet.write(row,column+5,float(cnt)/total_reads,perc_format)
       worksheet.write(row,column+6,float(cnt)/float(total_rw),perc_format)
       row+=1
-
+  
   worksheet.write(row,column,'Total',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
   worksheet.write(row,column+2,read_subtotal,num_format1)
   worksheet.write(row,column+3,read_subtotal/2,num_format1)
-  worksheet.write(row+1,column,'TPS',header_format4)
+  worksheet.write(row,column+6,float(total_reads)/float(total_rw),perc_format)
+  write_cmt(worksheet,chr(ord('@')+column+7)+str(row+1),'Total R % RW')
+  worksheet.write(row+1,column,'Read TPS',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+2),'Read TPS')
   worksheet.write(row+1,column+2,float(read_subtotal)/float(total_uptime),num_format1)
   worksheet.write(row+1,column+3,float(read_subtotal/2)/float(total_uptime),num_format1)
-  worksheet.write(row+2,column,'TP Month',header_format4)
+  worksheet.write(row+2,column,'Read TP Month',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+3),'Read TP Month')
   worksheet.write(row+2,column+2,float(read_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
   worksheet.write(row+2,column+3,float(read_subtotal/2)/float(total_uptime)*60*60*24*365.25/12,num_format1)
 
   worksheet.write(row+4,column,'Uptime (sec)',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+5),'Uptime (sec)')
   worksheet.write(row+4,column+1,total_uptime,num_format1)
   worksheet.write(row+5,column,'Uptime (day)',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+6),'Uptime (day)')
   worksheet.write(row+5,column+1,float(total_uptime)/60/60/24,num_format1)
 
   perc_writes = 0.0
@@ -931,58 +1009,48 @@ for cluster_url in data_url:
   column = 8
   astra_write_subtotal = 0
   for writes in write_count:
-    perc_writes = float(write_subtotal) / float(total_writes)
-    if (perc_writes <= write_threshold):
-      ks = writes['keyspace']
-      tbl = writes['table']
-      cnt = writes['count']
-      try:
-        type(table_totals[ks])
-      except:
-        table_totals[ks] = {}
-      try:
-        type(table_totals[ks][tbl])
-        table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
-      except:
-        table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
-      write_subtotal += cnt
-      astra_write_subtotal += float(cnt)/float(tbl_data[ks]['rf'])
-      worksheet.write(row,column,ks,data_format)
-      worksheet.write(row,column+1,tbl,data_format)
-      worksheet.write(row,column+2,cnt,num_format1)
-      worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
-      worksheet.write(row,column+4,float(cnt)/float(tbl_data[ks]['rf']),num_format1)
-      worksheet.write(row,column+5,float(cnt)/total_uptime,num_format2)
-      worksheet.write(row,column+6,float(cnt)/total_writes,perc_format)
-      worksheet.write(row,column+7,float(cnt)/float(total_rw),perc_format)
-      row+=1
+    ks = writes['keyspace']
+    tbl = writes['table']
+    cnt = writes['count']
+    try:
+      type(table_totals[ks])
+    except:
+      table_totals[ks] = {}
+    try:
+      type(table_totals[ks][tbl])
+      table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
+    except:
+      table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
+    astra_write_subtotal += float(cnt)/float(tbl_data[ks]['rf'])
+    worksheet.write(row,column,ks,data_format)
+    worksheet.write(row,column+1,tbl,data_format)
+    worksheet.write(row,column+2,cnt,num_format1)
+    worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
+    worksheet.write(row,column+4,float(cnt)/float(tbl_data[ks]['rf']),num_format1)
+    worksheet.write(row,column+5,float(cnt)/total_uptime,num_format2)
+    worksheet.write(row,column+6,float(cnt)/total_writes,perc_format)
+    worksheet.write(row,column+7,float(cnt)/float(total_rw),perc_format)
+    row+=1
+
   worksheet.write(row,column,'Total',header_format4)
-  worksheet.write(row,column+2,write_subtotal,num_format1)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
+  worksheet.write(row,column+2,total_writes,num_format1)
   worksheet.write(row,column+4,astra_write_subtotal,num_format1)
-  worksheet.write(row+1,column,'TPS',header_format4)
-  worksheet.write(row+1,column+2,float(write_subtotal)/float(total_uptime),num_format1)
+  worksheet.write(row,column+7,float(total_writes)/float(total_rw),perc_format)
+  write_cmt(worksheet,chr(ord('@')+column+8)+str(row+1),'Total W % RW')
+  worksheet.write(row+1,column,'Write TPS',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+2),'Write TPS')
+  worksheet.write(row+1,column+2,float(total_writes)/float(total_uptime),num_format1)
   worksheet.write(row+1,column+4,float(astra_write_subtotal)/float(total_uptime),num_format1)
-  worksheet.write(row+2,column,'TP Month',header_format4)
-  worksheet.write(row+2,column+2,float(write_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet.write(row+2,column,'Write TP Month',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+3),'Write TP Month')
+  worksheet.write(row+2,column+2,float(total_writes)/float(total_uptime)*60*60*24*365.25/12,num_format1)
   worksheet.write(row+2,column+4,float(astra_write_subtotal)/float(total_uptime)*60*60*24*365.25/12,num_format1)
 
-
-  reads_tps = total_reads/total_uptime
-  reads_tpd = reads_tps*60*60*24
-  reads_tpmo = reads_tps*60*60*24*365.25/12
-
-  writes_tps = total_writes/total_uptime
-  writes_tpd = writes_tps*60*60*24
-  writes_tpmo = writes_tps*60*60*24*365.25/12
-
+  # create the Astra Chart tab
   astra_writes_tps = astra_total_writes/total_uptime
   astra_writes_tpd = astra_writes_tps*60*60*24
   astra_writes_tpmo = astra_writes_tps*60*60*24*365.25/12
-
-  total_tps = float(total_rw)/total_uptime
-  total_tpd = total_tps*60*60*24
-  total_tpmo = total_tps*60*60*24*365.25/12
-  days_uptime = total_uptime/60/60/24
 
   row=1
   column=0
@@ -991,14 +1059,19 @@ for cluster_url in data_url:
   worksheet_chart.set_column(0,0,25)
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read Calls per Sec',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read Calls per Sec')
   worksheet_chart.write(row,column+1,float(read_subtotal/2)/float(total_uptime),num_format1)
   worksheet_chart.write(row+1,column,'Read Calls per Month',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read Calls per Month')
   worksheet_chart.write(row+1,column+1,float(read_subtotal/2)/float(total_uptime)*60*60*24*365.25/12,num_format1)
   worksheet_chart.write(row+2,column,'Write Calls per Sec',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write Calls per Sec')
   worksheet_chart.write(row+2,column+1,astra_writes_tps,num_format1)
   worksheet_chart.write(row+3,column,'Write Calls per Month',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write Calls per Month')
   worksheet_chart.write(row+3,column+1,astra_writes_tpmo,num_format1)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size (GB)')
   worksheet_chart.write(row+4,column+1,total_set_size/1000000000,num_format2)
 
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
@@ -1011,6 +1084,7 @@ for cluster_url in data_url:
   column=0
   for header in gc_headers:
     gc_worksheet.write(row,column,header,title_format)
+    write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),header)
     column+=1
 
   for col_num,col_width in enumerate(gc_widths):
