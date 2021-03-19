@@ -1,4 +1,3 @@
-# astra-perseverance 
 ![Logo](https://user-images.githubusercontent.com/32074414/111834321-cf245180-88c9-11eb-9862-2c83cb527ff6.png)
 
 <!-- TABLE OF CONTENTS -->
