@@ -588,7 +588,7 @@ for cluster_url in data_url:
       max_gc[node]=''
       tz[node]='UTC'
       if (path.isfile(jsppath1)):
-        tz[node] = get_param(jsppath1,'user.timezone',2).strip(',').strip('"')
+        tz[node] = get_param(jsppath1,'user.timezone',1).strip(',').strip('"')
       elif (path.isfile(jsppath2)):
         tz[node] = get_param(jsppath2,'user.timezone',0).strip('user.timezone=')
       if (tz[node]=='Default'): tz[node] = 'UTC'
