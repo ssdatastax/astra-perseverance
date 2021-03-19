@@ -80,7 +80,7 @@ or for open source cassandra:
 ./collect_diag.sh -t oss -f mhosts -r -s \
   "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
 ```
-The mhost file is a file with a list of nodes (one per line)
+The mhost is a file with a list of nodes (one per line)
 
 ### Commands and Arguments
 
