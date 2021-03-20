@@ -191,10 +191,10 @@ comments = [
 'comment':["The combined uptime of all nodes in the cluster"]
 },{
 'fields':['Total R % RW'],
-'comment':["The total read requests percentage of combined RW requests (read and write) the cluster."]
+'comment':["The total read requests percentage of combined RW requests (read and write) in the cluster."]
 },{
 'fields':['Total W % RW'],
-'comment':["The total write requests percentage of combined RW requests (read and write) the cluster."]
+'comment':["The total write requests percentage of combined RW requests (read and write) in the cluster."]
 }
 ]
 
@@ -249,6 +249,7 @@ for cluster_url in data_url:
   astra_total_writes = 0
   read_count = []
   write_count =[]
+  table_tps={}
   astra_write_count =[]
   total_rw = 0
   ks_array = []
@@ -284,6 +285,7 @@ for cluster_url in data_url:
   oldest_gc = {}
   max_gc = {}
   exclude_tab = []
+  node_uptime = {}
 
   rootPath = cluster_url + '/nodes/'
 
@@ -443,8 +445,8 @@ for cluster_url in data_url:
         cfstatFile = open(cfstat, 'r')
       except:
         cfstatFile = open(tablestat, 'r')
-      
-      total_uptime = total_uptime + int(get_param(infopath,'Uptime',3))
+      node_uptime[node] = int(get_param(infopath,'Uptime',3))
+      total_uptime = total_uptime + node_uptime[node]
 
       ks = ''
       tbl = ''
@@ -456,6 +458,10 @@ for cluster_url in data_url:
           if('Keyspace' in line):
             ks = line.split(':')[1].strip()
           if (ks<>''):
+            try:
+              type(table_tps[ks])
+            except:
+              table_tps[ks]={}
             if('Table: ' in line):
               tbl = line.split(':')[1].strip()
               is_index = 0
@@ -463,6 +469,10 @@ for cluster_url in data_url:
               tbl = line.split(':')[1].strip()
               is_index = 1
             if(tbl<>''):
+              try:
+                type(table_tps[ks][tbl])
+              except:
+                table_tps[ks][tbl]={}
               if ('Space used (total):' in line):
                 tsize = float(line.split(':')[1].strip())
                 if (tsize):
@@ -489,6 +499,10 @@ for cluster_url in data_url:
                 if (count > 0):
                   total_reads += count
                   try:
+                    table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
+                  except:
+                    table_tps[ks][tbl]['read'] = float(count) / float(node_uptime[node])
+                  try:
                     type(read_table[ks])
                   except:
                     read_table[ks] = {}
@@ -501,6 +515,10 @@ for cluster_url in data_url:
                 if('Local write count: ' in line):
                   count = int(line.split(':')[1].strip())
                   if (count > 0):
+                    try:
+                      table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
+                    except:
+                      table_tps[ks][tbl]['write'] = float(count) / float(node_uptime[node])
                     try:
                       astra_total_writes += count / tbl_data[ks]['rf']
                       total_writes += count
@@ -515,7 +533,7 @@ for cluster_url in data_url:
                       write_table[ks][tbl] += count
                     except:
                       write_table[ks][tbl] = count
-  
+              
   # total up R/W across all nodes
   for ks,readtable in read_table.items():
     for tablename,tablecount in readtable.items():
@@ -569,11 +587,6 @@ for cluster_url in data_url:
       oldest_gc[node]={'jd':99999999999.9,'dt':''}
       max_gc[node]=''
       tz[node]='UTC'
-      if (path.isfile(jsppath1)):
-        tz[node] = get_param(jsppath1,'user.timezone',1).strip(',').strip('"')
-      elif (path.isfile(jsppath2)):
-        tz[node] = get_param(jsppath2,'user.timezone',0).strip('user.timezone=')
-      if (tz[node]=='Default'): tz[node] = 'UTC'
       
       for logfile in os.listdir(systemlogpath):
         if(logfile.split('.')[0] == 'system'):
@@ -943,39 +956,36 @@ for cluster_url in data_url:
   row = 3
   perc_reads = 0.0
   column = 0
+  total_row = {'read_tps':0,'write_tps':0}
+  
   for reads in read_count:
     perc_reads = float(read_subtotal) / float(total_reads)
-    if (perc_reads <= read_threshold):
-      ks = reads['keyspace']
-      tbl = reads['table']
-      cnt = reads['count']
-      try:
-        type(table_totals[ks])
-      except:
-        table_totals[ks] = {}
-      table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
-      read_subtotal += cnt
-      worksheet.write(row,column,ks,data_format)
-      worksheet.write(row,column+1,tbl,data_format)
-      worksheet.write(row,column+2,cnt,num_format1)
-      worksheet.write(row,column+3,float(cnt)/total_uptime,num_format2)
-      worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
-      worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
-      row+=1
+    ks = reads['keyspace']
+    tbl = reads['table']
+    cnt = reads['count']
+    try:
+      type(table_totals[ks])
+    except:
+      table_totals[ks] = {}
+    table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
+    read_subtotal += cnt
+    worksheet.write(row,column,ks,data_format)
+    worksheet.write(row,column+1,tbl,data_format)
+    worksheet.write(row,column+2,cnt,num_format1)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['read'],num_format2)
+    worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
+    worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
+    row+=1
+    total_row['read_tps'] += table_tps[ks][tbl]['read']
+
+  total_row['read']=row
   
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,total_reads,num_format1)
-  worksheet.write(row,column+3,total_reads/total_uptime,num_format1)
-  worksheet.write(row,column+5,float(total_reads)/float(total_rw),perc_format)
+  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',num_format1)
+  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',num_format1)
+  worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
-
-  worksheet.write(row+4,column,'Uptime (sec)',header_format4)
-  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+5),'Uptime (sec)')
-  worksheet.write(row+4,column+1,total_uptime,num_format1)
-  worksheet.write(row+5,column,'Uptime (day)',header_format4)
-  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+6),'Uptime (day)')
-  worksheet.write(row+5,column+1,float(total_uptime)/60/60/24,num_format1)
 
   perc_writes = 0.0
   row = 3
@@ -998,37 +1008,38 @@ for cluster_url in data_url:
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
     worksheet.write(row,column+2,cnt,num_format1)
-    worksheet.write(row,column+3,float(cnt)/total_uptime,num_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['write'],num_format2)
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
+    total_row['write_tps'] += table_tps[ks][tbl]['write']
+
 
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,total_writes,num_format1)
-  worksheet.write(row,column+3,total_writes/total_uptime,num_format1)
-  worksheet.write(row,column+5,float(total_writes)/float(total_rw),perc_format)
+  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',num_format1)
+  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',num_format1)
+  worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
   # create the Astra Chart tab
   row=1
   column=0
-  print(total_writes)
   worksheet_chart.merge_range('A1:B1', 'Astra Conversion Info for '+cluster_name, title_format3)
   worksheet_chart.set_column(0,0,25)
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write(row,column+1,float(total_reads)/float(total_uptime),num_format1)
+  worksheet_chart.write(row,column+1,total_row['read_tps'],num_format1)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write(row+1,column+1,float(total_reads)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write(row+1,column+1,float(total_row['write_tps'])*60*60*24*365.25/12,num_format1)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write(row+2,column+1,float(total_writes)/float(total_uptime),num_format1)
+  worksheet_chart.write(row+2,column+1,total_row['write_tps'],num_format1)
   worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write(row+3,column+1,float(total_writes)/float(total_uptime)*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write(row+3,column+1,float(total_row['write_tps'])*60*60*24*365.25/12,num_format1)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size (GB)')
   worksheet_chart.write(row+4,column+1,total_set_size/1000000000,num_format2)
