@@ -1033,7 +1033,7 @@ for cluster_url in data_url:
   worksheet_chart.write(row,column+1,total_row['read_tps'],num_format1)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write(row+1,column+1,float(total_row['write_tps'])*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write(row+1,column+1,float(total_row['read_tps'])*60*60*24*365.25/12,num_format1)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
   worksheet_chart.write(row+2,column+1,total_row['write_tps'],num_format1)
