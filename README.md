@@ -79,15 +79,15 @@ mhost is a file with a list of nodes (one per line)
 #### Creating the Spreadsheet
 To create the spreadsheet run the following command:
 ```
-python look.py -p [path_to_diag_folder]
+python explore.py -p [path_to_diag_folder]
 ```
 You may run the script on multiple diagnostic folders:
 ```
-python look.py -p [path_to_diag_folder1] -p [path_to_diag_folder2] -p [path_to_diag_folder3]
+python explore.py -p [path_to_diag_folder1] -p [path_to_diag_folder2] -p [path_to_diag_folder3]
 ```
 
 #### Help
 There is a brief help info section:
 ```
-python extract_load.py --help
+python explore.py --help
 ``` 
