@@ -136,14 +136,14 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0})
-sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0})
-sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'','extra':0})
-sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':100,'strip':'','extra':0})
-sheets_data.append({'sheet_name':'partition','tab_name':'Wide Partitions','cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':100000000,'strip':'','extra':1})
-sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':15,'strip':'','extra':1})
-sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':5,'strip':'ms','extra':0})
-sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'ms','extra':0})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0})
+sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0})
+sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'','extra':0})
+sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':100,'strip':'','extra':0})
+sheets_data.append({'sheet_name':'partition','tab_name':'Wide Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':100000000,'strip':'','extra':1})
+sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':15,'strip':'','extra':1})
+sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':5,'strip':'ms','extra':0})
+sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'ms','extra':0})
 #sheets_data.append({'sheet_name':'ts','tab_name':'Tombstones','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'extra':0})
 
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
@@ -195,9 +195,20 @@ comments = [
 },{
 'fields':['Total W % RW'],
 'comment':["The total write requests percentage of combined RW requests (read and write) in the cluster."]
+},{
+'fields':['Memtable Row Size'],
+'comment':["Average size of each record (row) in the memtables across all nodes."]
+},{
+'fields':['Memtable # Rows'],
+'comment':["The total number of records (rows) in the memtables across all nodes"]
+},{
+'fields':['Avg Row Size'],
+'comment':["The average size of each records (row) in tablehistograms across all nodes."]
+},{
+'fields':['Sample # Rows'],
+'comment':["The total number of records (rows) in tablehistograms across all nodes"]
 }
 ]
-
 
 # initialize script variables
 data_url = []
@@ -250,6 +261,7 @@ for cluster_url in data_url:
   read_count = []
   write_count =[]
   table_tps={}
+  table_row_size = {}
   astra_write_count =[]
   total_rw = 0
   ks_array = []
@@ -460,8 +472,10 @@ for cluster_url in data_url:
           if (ks<>''):
             try:
               type(table_tps[ks])
+              type(table_row_size[ks])
             except:
               table_tps[ks]={}
+              table_row_size[ks]={}
             if('Table: ' in line):
               tbl = line.split(':')[1].strip()
               is_index = 0
@@ -471,8 +485,10 @@ for cluster_url in data_url:
             if(tbl<>''):
               try:
                 type(table_tps[ks][tbl])
+                type(table_row_size[ks][tbl])
               except:
-                table_tps[ks][tbl]={}
+                table_tps[ks][tbl]={'write':0,'read':0}
+                table_row_size[ks][tbl]={'cell_cnt':0,'mem_size':0,'row_cnt':0,'row_size':0}
               if ('Space used (total):' in line):
                 tsize = float(line.split(':')[1].strip())
                 if (tsize):
@@ -494,14 +510,11 @@ for cluster_url in data_url:
                     size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
                   except:
                     size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
-              if('Local read count: ' in line):
+              elif('Local read count: ' in line):
                 count = int(line.split(':')[1].strip())
                 if (count > 0):
                   total_reads += count
-                  try:
-                    table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
-                  except:
-                    table_tps[ks][tbl]['read'] = float(count) / float(node_uptime[node])
+                  table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
                   try:
                     type(read_table[ks])
                   except:
@@ -511,14 +524,19 @@ for cluster_url in data_url:
                     read_table[ks][tbl] += count
                   except:
                     read_table[ks][tbl] = count
+              elif('Memtable cell count: ' in line):
+                count = int(line.split(':')[1].strip())
+                if (count > 0):
+                  table_row_size[ks][tbl]['cell_cnt'] += count
+              elif('Memtable data size: ' in line):
+                count = int(line.split(':')[1].strip())
+                if (count > 0):
+                  table_row_size[ks][tbl]['mem_size'] += count
               if (is_index == 0):
                 if('Local write count: ' in line):
                   count = int(line.split(':')[1].strip())
                   if (count > 0):
-                    try:
-                      table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
-                    except:
-                      table_tps[ks][tbl]['write'] = float(count) / float(node_uptime[node])
+                    table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
                     try:
                       astra_total_writes += count / tbl_data[ks]['rf']
                       total_writes += count
@@ -533,7 +551,17 @@ for cluster_url in data_url:
                       write_table[ks][tbl] += count
                     except:
                       write_table[ks][tbl] = count
-              
+
+  # average row size by Memtable
+  for ks,memtbl in table_row_size.items():
+    for tbl,memdata in memtbl.items():
+      if memdata['cell_cnt']>0:
+        try:
+          table_row_size[ks][tbl]['row_cnt'] = memdata['cell_cnt'] / len(tbl_data[ks][tbl]['field'])
+          table_row_size[ks][tbl]['row_size'] = (memdata['mem_size'] / table_row_size[ks][tbl]['row_cnt'])
+        except:
+          table_row_size[ks][tbl]['row_cnt'] = 0
+
   # total up R/W across all nodes
   for ks,readtable in read_table.items():
     for tablename,tablecount in readtable.items():
@@ -631,12 +659,15 @@ for cluster_url in data_url:
   # Create Tabs
   worksheet_chart = workbook.add_worksheet('Astra Chart')
   worksheet = workbook.add_worksheet('Workload')
+  worksheet.freeze_panes(3,0)
   ds_worksheet = workbook.add_worksheet('Data Size')
+  ds_worksheet.freeze_panes(2,2)
   gc_worksheet = workbook.add_worksheet('GC Pauses')
+  gc_worksheet.freeze_panes(2,2)
   for sheet_array in sheets_data:
     if (sheet_array['sheet_name'] not in exclude_tab):
       stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
-
+      stats_sheets[sheet_array['sheet_name']].freeze_panes(sheet_array['freeze_row'],sheet_array['freeze_col'])
 
   # Create Formats
   header_format1 = workbook.add_format({
@@ -748,11 +779,10 @@ for cluster_url in data_url:
       'font_color': 'white',
       'bg_color': '#EB6C34'})
 
-  
-  ds_worksheet.merge_range('A1:G1', 'Table Size', title_format)
+  ds_worksheet.merge_range('A1:I1', 'Table Size', title_format)
 
-  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size','Average Record Size','Est. # Records']
-  ds_headers_width=[14,25,17,4,17,20,14]
+  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size','Memtable Row Size','Memtable # Rows','Avg Row Size','Sample # Rows']
+  ds_headers_width=[14,25,17,4,17,20,20,20,20]
 
   column=0
   for col_width in ds_headers_width:
@@ -766,6 +796,7 @@ for cluster_url in data_url:
         ds_worksheet.write(1,column,header)
       else:
         ds_worksheet.write(1,column,header,header_format1)
+        write_cmt(ds_worksheet,chr(ord('@')+column+1)+'2',header)
       column+=1
 
   row = 2
@@ -782,19 +813,32 @@ for cluster_url in data_url:
       ds_worksheet.write(row,column+2,t_size,num_format1)
       ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
       ds_worksheet.write(row,column+4,float(t_size)/float(tbl_data[ks]['rf']),num_format1)
-      try:
-        ds_worksheet.write(row,column+5,tbl_row_size[ks][tbl],num_format1)
-      except:
+
+  #    table_row_size[ks][tbl]['row_cnt'] = memtable['cell_cnt'] / len(tbl_data[ks][tbl]['field'])
+  #    table_row_size[ks][tbl]['row_size'] = (memtable['mem_size'] / table_row_size[ks][tbl]['row_cnt'])
+
+      if table_row_size[ks][tbl]['row_size']>0:
+        ds_worksheet.write(row,column+5,table_row_size[ks][tbl]['row_size'],num_format1)
+        ds_worksheet.write(row,column+6,table_row_size[ks][tbl]['row_cnt'],num_format1)
+      else:
         ds_worksheet.write(row,column+5,"no data",num_format1)
-      try:
-        ds_worksheet.write(row,column+6,t_size/tbl_row_size[ks][tbl],num_format1)
-      except:
         ds_worksheet.write(row,column+6,"no data",num_format1)
+      try:
+        ds_worksheet.write(row,column+7,tbl_row_size[ks][tbl],num_format1)
+      except:
+        ds_worksheet.write(row,column+7,"no data",num_format1)
+      try:
+        ds_worksheet.write(row,column+8,t_size/tbl_row_size[ks][tbl],num_format1)
+      except:
+        ds_worksheet.write(row,column+8,"no data",num_format1)
+
       row+=1
 
+
+
   ds_worksheet.write(row,column,'Total',header_format4)
-  ds_worksheet.write(row,column+2,total_t_size,num_format1)
-  ds_worksheet.write(row,column+4,total_set_size,num_format1)
+  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',num_format3)
+  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',num_format3)
 
   cluster_name = ''
   prev_nodes = []
@@ -982,8 +1026,8 @@ for cluster_url in data_url:
   
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',num_format1)
-  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',num_format1)
+  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',num_format3)
+  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',num_format3)
   worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
 
@@ -1017,8 +1061,8 @@ for cluster_url in data_url:
 
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',num_format1)
-  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',num_format1)
+  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',num_format3)
+  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',num_format3)
   worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
