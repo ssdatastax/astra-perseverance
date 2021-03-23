@@ -126,24 +126,99 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
           if(str(line.split()[param_pos].strip())):
             def_val = str(line.split()[param_pos].strip())
           return def_val
-    try:
-      type(dc_array[dc])
-    except:
-      dc_array.append(dc)
   else:
     exit('ERROR: No File: ' + filepath)
 
+# initialize script variables
+data_url = []
+read_threshold = 1
+write_threshold = 1
+new_dc = ''
+show_help = ''
+include_system = 0
+log_df = '%Y-%m-%d %H:%M:%S'
+dt_fmt = '%m/%d/%Y %I:%M%p'
+tz = {}
+th_rl = 5
+th_wl = 1
+th_sstbl = 15
+th_gcp = 800
+th_drm = 100000
+th_tblcnt = 100
+th_wpar = 100
+
+# communicate command line help
+for argnum,arg in enumerate(sys.argv):
+  if(arg=='-h' or arg =='--help'):
+    help_content = \
+      'usage: look.py [-h] [--help] [-inc_yaml]\n'\
+      '                       [-p PATH_TO_DIAG_FOLDER]\n'\
+      '                       [-th_rl READ_LATENCY_THRESHOLD]\n'\
+      '                       [-th_wl WRITE_LATENCY_THRESHOLD]\n'\
+      '                       [-th_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
+      '                       [-th_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
+      '                       [-th_tblcnt CLUSTER_TABLE_COUNT_THRESHOLD]\n'\
+      '                       [-th_wpar WIDE_PARTITON_SIZE_THRESHOLD]\n'\
+      'required arguments:\n'\
+      '-p                     Path to the diagnostics folder\n'\
+      '                        Multiple diag folders accepted\n'\
+      '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
+      'optional arguments:\n'\
+      '-h, --help             This help info\n'\
+      '-th_rl                 Threshold: Read Latency\n'\
+      '                        Local read time(ms) in the cfstats log \n'\
+      '                        to be listed in the Read Latency tab\n'\
+      '                        Default Value: '+str(th_rl)+'\n'\
+      '-th_wl                 Threshold: Write Latency\n'\
+      '                        Local write time(ms) in the cfstats log \n'\
+      '                        to be listed in the Read Latency tab\n'\
+      '                        Default Value: '+str(th_wl)+'\n'\
+      '-th_sstbl              Threshold: SSTable Count\n'\
+      '                        SStable count in the cfstats log \n'\
+      '                        to be listed in the Table Qantity tab\n'\
+      '                        Default Value: '+str(th_sstbl)+'\n'\
+      '-th_drm                Threshold: Dropped Mutations\n'\
+      '                        Dropped Mutation count in the cfstats log \n'\
+      '                        to be listed in the Dropped Mutation tab\n'\
+      '                        Default Value: '+str(th_drm)+'\n'\
+      '-th_tblcnt             Threshold: Cluster Table Count\n'\
+      '                        Quantity of tables in the cluster\n'\
+      '                        to be listed in the Table Qty tab\n'\
+      '                        Default Value: '+str(th_tblcnt)+'\n'\
+      '-th_wpar               Threshold: Wide Partitions\n'\
+      '                        Size of partition (MB)\n'\
+      '                        to be listed in the Wide Partition tab\n'\
+      '                        Default Value: '+str(th_wpar)+'\n'
+    
+    exit(help_content)
+
+# collect and analyze command line arguments
+for argnum,arg in enumerate(sys.argv):
+  if(arg=='-p'):
+    data_url.append(sys.argv[argnum+1])
+  elif(arg=='-th_rl'):
+    th_rl = float(sys.argv[argnum+1])
+  elif(arg=='-th_wl'):
+    th_wl = float(sys.argv[argnum+1])
+  elif(arg=='-th_sstbl'):
+    th_sstbl = float(sys.argv[argnum+1])
+  elif(arg=='-th_drm'):
+    th_drm = float(sys.argv[argnum+1])
+  elif(arg=='-th_tblcnt'):
+    th_tblcnt = float(sys.argv[argnum+1])
+  elif(arg=='-th_wpar'):
+    th_wpar = float(sys.argv[argnum+1])
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0})
-sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0})
-sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'','extra':0})
-sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':100,'strip':'','extra':0})
-sheets_data.append({'sheet_name':'partition','tab_name':'Wide Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':100000000,'strip':'','extra':1})
-sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':15,'strip':'','extra':1})
-sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':5,'strip':'ms','extra':0})
-sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':1,'strip':'ms','extra':0})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0,'comment':''})
+sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':''})
+sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(th_drm)+' dropped mutations (cfstats)'})
+sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':th_tblcnt,'strip':'','extra':0,'comment':''})
+sheets_data.append({'sheet_name':'partition','tab_name':'Wide Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':th_wpar*1000000,'strip':'','extra':1,'comment':'Table with partiton sizes greater than '+str(th_wpar)+' (cfstats)'})
+sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':th_sstbl,'strip':'','extra':1,'comment':''})
+sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_rl,'strip':'ms','extra':0,'comment':''})
+sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_wl,'strip':'ms','extra':0,'comment':''})
 #sheets_data.append({'sheet_name':'ts','tab_name':'Tombstones','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'extra':0})
 
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
@@ -151,7 +226,7 @@ ks_type_abbr = {'app':'Application','sys':'System'}
 
 comments = [
 {
-'fields':['Data Size (GB)'],
+'fields':['Data Size (GB)','Data Set Size'],
 'comment':["Data Size is a single set of complete data.  It does not include replication data across the cluster"]
 },{
 'fields':['Read Requests'],
@@ -210,39 +285,6 @@ comments = [
 }
 ]
 
-# initialize script variables
-data_url = []
-read_threshold = 1
-write_threshold = 1
-new_dc = ''
-show_help = ''
-include_system = 0
-log_df = '%Y-%m-%d %H:%M:%S'
-dt_fmt = '%m/%d/%Y %I:%M%p'
-tz = {}
-
-# collect and analyze command line arguments
-for argnum,arg in enumerate(sys.argv):
-  if(arg=='-h' or arg =='--help'):
-    show_help = 'y'
-  elif(arg=='-p'):
-    data_url.append(sys.argv[argnum+1])
-
-# communicate command line help
-if show_help:
-  help_content = \
-  'usage: look.py [-h] [--help] [-inc_yaml]\n'\
-  '                       [-p PATH_TO_DIAG_FOLDER]\n'\
-  '                       [-rt READ_THRESHOLD]\n'\
-  '                       [-wt WRITE_THRESHOLD]\n'\
-  '                       [-sys INCLUDE SYSTEM KEYSPACES]\n'\
-  'optional arguments:\n'\
-  '-h, --help             This help info\n'\
-  '-p                     Path to the diagnostics folder\n'\
-  '                        Multiple diag folders accepted\n'\
-  '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
-
-  exit(help_content)
 
 # run through each cluster diag file path listed in command line
 for cluster_url in data_url:
@@ -329,7 +371,6 @@ for cluster_url in data_url:
           line = line.strip('\n').strip()
           if('CREATE KEYSPACE' in line):
             prev_ks = ks
-            ks_array.append(ks)
             ks = line.split()[2].strip('"')
             tbl_data[ks] = {'cql':line,'rf':0}
             rf=0;
@@ -1015,8 +1056,8 @@ for cluster_url in data_url:
     read_subtotal += cnt
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt,num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['read'],num_format2)
+    worksheet.write(row,column+2,cnt/2,num_format1)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/2,num_format2)
     worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1051,8 +1092,8 @@ for cluster_url in data_url:
     astra_write_subtotal += float(cnt)/float(tbl_data[ks]['rf'])
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt,num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['write'],num_format2)
+    worksheet.write(row,column+2,cnt/len(tbl_data[ks][tbl]['field']),num_format1)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['write']tbl_data[ks]['rf'],num_format2)
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1074,7 +1115,7 @@ for cluster_url in data_url:
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write(row,column+1,total_row['read_tps'],num_format1)
+  worksheet_chart.write(row,column+1,'=Workload!D:101',num_format1)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
   worksheet_chart.write(row+1,column+1,float(total_row['read_tps'])*60*60*24*365.25/12,num_format1)
