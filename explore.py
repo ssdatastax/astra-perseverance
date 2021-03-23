@@ -1093,7 +1093,7 @@ for cluster_url in data_url:
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
     worksheet.write(row,column+2,cnt/len(tbl_data[ks][tbl]['field']),num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['write']tbl_data[ks]['rf'],num_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['write']/tbl_data[ks]['rf'],num_format2)
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
