@@ -551,6 +551,27 @@ for cluster_url in data_url:
                     size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
                   except:
                     size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
+              elif ('Memtable data size:' in line):
+                tsize = float(line.split(':')[1].strip())
+                if (tsize):
+                  total_size += tsize
+                  # astra pricing will be based on data on one set of data
+                  # divide the total size by the total rf (gives the size per node)
+                  try:
+                    astra_size += tsize / tbl_data[ks]['rf']
+                  except:
+                    tbl_data[ks] = {}
+                    tbl_data[ks]['rf'] = float(1)
+                    astra_size += tsize / tbl_data[ks]['rf']
+                  try:
+                    type(size_table[ks])
+                  except:
+                    size_table[ks] = {}
+                  try:
+                    type(size_table[ks][tbl])
+                    size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
+                  except:
+                    size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
               elif('Local read count: ' in line):
                 count = int(line.split(':')[1].strip())
                 if (count > 0):
@@ -775,6 +796,14 @@ for cluster_url in data_url:
       'num_format': '#,##0.00',
       'valign': 'top'})
 
+  total_format1 = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '[>999999999]0.000,,," GB";[>999999]0.000,," MB";0.000," KB"',
+      'valign': 'top'})
+      
+
   num_format3 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
@@ -845,6 +874,8 @@ for cluster_url in data_url:
   column = 0
   total_t_size = 0
   total_set_size = 0.0
+  total_row = {'read':0,'write':0,'size':0}
+
   for ks,t_data in size_table.items():
     for tbl,t_size in t_data.items():
       total_t_size += t_size
@@ -854,9 +885,6 @@ for cluster_url in data_url:
       ds_worksheet.write(row,column+2,t_size,num_format1)
       ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
       ds_worksheet.write(row,column+4,float(t_size)/float(tbl_data[ks]['rf']),num_format1)
-
-  #    table_row_size[ks][tbl]['row_cnt'] = memtable['cell_cnt'] / len(tbl_data[ks][tbl]['field'])
-  #    table_row_size[ks][tbl]['row_size'] = (memtable['mem_size'] / table_row_size[ks][tbl]['row_cnt'])
 
       if table_row_size[ks][tbl]['row_size']>0:
         ds_worksheet.write(row,column+5,table_row_size[ks][tbl]['row_size'],num_format1)
@@ -874,12 +902,12 @@ for cluster_url in data_url:
         ds_worksheet.write(row,column+8,"no data",num_format1)
 
       row+=1
-
-
+      
+  total_row['size']=row
 
   ds_worksheet.write(row,column,'Total',header_format4)
-  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',num_format3)
-  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',num_format3)
+  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',total_format1)
+  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',total_format1)
 
   cluster_name = ''
   prev_nodes = []
@@ -1041,7 +1069,6 @@ for cluster_url in data_url:
   row = 3
   perc_reads = 0.0
   column = 0
-  total_row = {'read_tps':0,'write_tps':0}
   
   for reads in read_count:
     perc_reads = float(read_subtotal) / float(total_reads)
@@ -1052,23 +1079,29 @@ for cluster_url in data_url:
       type(table_totals[ks])
     except:
       table_totals[ks] = {}
+    try:
+      if type(table_totals[ks])>1:
+        div_by=2
+      else:
+        div_by=1
+    except:
+      div_by=1
     table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
     read_subtotal += cnt
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt/2,num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/2,num_format2)
+    worksheet.write(row,column+2,cnt/div_by,num_format1)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/div_by,num_format2)
     worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
-    total_row['read_tps'] += table_tps[ks][tbl]['read']
 
   total_row['read']=row
   
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',num_format3)
-  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',num_format3)
+  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',total_format1)
+  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',total_format1)
   worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
 
@@ -1097,13 +1130,13 @@ for cluster_url in data_url:
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
-    total_row['write_tps'] += table_tps[ks][tbl]['write']
 
+  total_row['write']=row
 
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',num_format3)
-  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',num_format3)
+  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',total_format1)
+  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',total_format1)
   worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
@@ -1115,19 +1148,19 @@ for cluster_url in data_url:
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write(row,column+1,'=Workload!D:101',num_format1)
+  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),total_format1)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write(row+1,column+1,float(total_row['read_tps'])*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',total_format1)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write(row+2,column+1,total_row['write_tps'],num_format1)
+  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),total_format1)
   worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write(row+3,column+1,float(total_row['write_tps'])*60*60*24*365.25/12,num_format1)
+  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',total_format1)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size (GB)')
-  worksheet_chart.write(row+4,column+1,total_set_size/1000000000,num_format2)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
+  worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1),total_format1)
 
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
 
@@ -1199,7 +1232,7 @@ for cluster_url in data_url:
         row+=1
         column=0
 
-  worksheet_chart.activate()
+#  worksheet_chart.activate()
   workbook.close()
   print('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'
 exit();
