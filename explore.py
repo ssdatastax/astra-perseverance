@@ -739,6 +739,13 @@ for cluster_url in data_url:
       'num_format': '[>999999999]0.000,,," GB/Sec";[>999999]0.000,," MB/Sec";0.000," KB/Sec"',
       'valign': 'top'})
 
+  tpmo_format1 = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '[>999999999]0.000,,," GB/Mo";[>999999]0.000,," MB/Mo";0.000," KB/Mo"',
+      'valign': 'top'})
+
   num_format3 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
