@@ -731,7 +731,14 @@ for cluster_url in data_url:
       'border': 1,
       'num_format': '[>999999999]0.000,,," GB";[>999999]0.000,," MB";0.000," KB"',
       'valign': 'top'})
-      
+
+  tps_format1 = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '[>999999999]0.000,,," GB/Sec";[>999999]0.000,," MB/Sec";0.000," KB/Sec"',
+      'valign': 'top'})
+
   num_format3 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
@@ -1017,7 +1024,7 @@ for cluster_url in data_url:
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
   worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',total_format1)
-  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',total_format1)
+  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',tps_format1)
   worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
 
@@ -1051,7 +1058,7 @@ for cluster_url in data_url:
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
   worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',total_format1)
-  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',total_format1)
+  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',tps_format1)
   worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
@@ -1063,16 +1070,16 @@ for cluster_url in data_url:
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),total_format1)
+  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),tps_format1)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',total_format1)
+  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',tps_format1)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),total_format1)
+  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),tps_format1)
   worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',total_format1)
+  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',tps_format1)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
   worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1),total_format1)
