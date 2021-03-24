@@ -295,16 +295,14 @@ for cluster_url in data_url:
   read_subtotal = 0
   write_subtotal = 0
   total_size = 0
-  astra_size = 0
   dc_total_size = 0
   total_reads = 0
   total_writes = 0
-  astra_total_writes = 0
   read_count = []
   write_count =[]
+  table_count =[]
   table_tps={}
   table_row_size = {}
-  astra_write_count =[]
   total_rw = 0
   ks_array = []
   count = 0
@@ -320,18 +318,6 @@ for cluster_url in data_url:
   dc_list = []
   dc_gcpause = {}
   node_gcpause = {}
-  heap_size = {}
-  heap_used = {}
-  off_heap = {}
-  newsize = {}
-  maxgcpause = {}
-  ihop = {}
-  maxten = {}
-  par_threads = {}
-  conc_threads = {}
-  reg_size = {}
-  max_dir_mem = {}
-  thread_stack_size = {}
   gc_data = {}
   gc_dt = []
   wname = 'gc_data'
@@ -369,21 +355,29 @@ for cluster_url in data_url:
         tbl_data = {}
         for line in schemaFile:
           line = line.strip('\n').strip()
-          if('CREATE KEYSPACE' in line):
+          if("CREATE KEYSPACE" in line):
             prev_ks = ks
             ks = line.split()[2].strip('"')
             tbl_data[ks] = {'cql':line,'rf':0}
             rf=0;
             for dc_name in dc_array:
-              i=0
-              for prt in line.split():
-                prt_chk = "'"+dc_name+"':"
-                if (prt==prt_chk):
-                  rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                  tbl_data[ks]['rf']+=float(rf)
-                i+=1
-            if (rf==0.0):
-              tbl_data[ks]['rf']=float(1)
+              if ("'"+dc_name+"':" in line):
+                i=0
+                for prt in line.split():
+                  prt_chk = "'"+dc_name+"':"
+                  if (prt==prt_chk):
+                    rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                    tbl_data[ks]['rf']+=float(rf)
+                  i+=1
+              elif("'replication_factor':" in line):
+                i=0
+                for prt in line.split():
+                  prt_chk = "'replication_factor':"
+                  if (prt==prt_chk):
+                    rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                    tbl_data[ks]['rf']+=float(rf)
+                  i+=1
+              else:tbl_data[ks]['rf']=float(1)
           elif('CREATE INDEX' in line):
             prev_tbl = tbl
             tbl = line.split()[2].strip('"')
@@ -441,8 +435,6 @@ for cluster_url in data_url:
       keyspace = ''
       table = ''
       dc = ''
-      cfhistpath = rootPath + node + '/nodetool/cfhistograms'
-      tblhistpath = rootPath + node + '/nodetool/tablehistograms'
       cfstat = rootPath + node + '/nodetool/cfstats'
       tablestat = rootPath + node + '/nodetool/tablestats'
       clusterpath = rootPath + node + '/nodetool/describecluster'
@@ -452,47 +444,6 @@ for cluster_url in data_url:
       if (cluster_name == ''):
         cluster_name = get_param(clusterpath,'Name:',1)
 
-      if(path.isfile(cfhistpath)):
-        cfhistFile = open(cfhistpath, 'r')
-        tblhist = 1
-      elif(path.isfile(tblhistpath)):
-        cfhistFile = open(tblhistpath, 'r')
-        tblhist = 1
-      else:
-        tblhist = 0
-
-      # collect row data sizes from cfhistograms
-      if (tblhist==1):
-        ks = ''
-        tbl = ''
-        is_tbl_data = 0
-        for line in cfhistFile:
-          line = line.strip('\n').strip()
-          if (line==''):
-            tbl = ''
-            is_tbl_data = 0
-          elif ('No SSTables exists' in line):
-            is_tbl_data = 0
-          if('/' in line):
-            ks = line.split('/')[0].strip()
-            if (ks not in system_keyspace):
-              try:
-                type(tbl_row_size[ks])
-              except:
-                tbl_row_size[ks] = {}
-              tbl = line.split()[0].split('/')[1].strip()
-              is_tbl_data = 1
-              try:
-                type(tbl_row_size[ks][tbl])
-              except:
-                tbl_row_size[ks][tbl] = 0
-          if ('%' in line and is_tbl_data == 1 and ks not in system_keyspace):
-            per = float(line.split()[0].strip().strip('%'))
-            part_size = float(line.split()[4])
-            cell_count = float(line.split()[5])
-            num_fields = float(len(tbl_data[ks][tbl]['field']))
-            tbl_row_size[ks][tbl] += (100-per)/100 * (part_size/(cell_count/num_fields)) / tbl_data[ks]['rf']
-            
       # collect and analyze uptime and R/W counts from cfstats
       try:
         cfstatFile = open(cfstat, 'r')
@@ -513,10 +464,8 @@ for cluster_url in data_url:
           if (ks<>''):
             try:
               type(table_tps[ks])
-              type(table_row_size[ks])
             except:
               table_tps[ks]={}
-              table_row_size[ks]={}
             if('Table: ' in line):
               tbl = line.split(':')[1].strip()
               is_index = 0
@@ -526,10 +475,8 @@ for cluster_url in data_url:
             if(tbl<>''):
               try:
                 type(table_tps[ks][tbl])
-                type(table_row_size[ks][tbl])
               except:
                 table_tps[ks][tbl]={'write':0,'read':0}
-                table_row_size[ks][tbl]={'cell_cnt':0,'mem_size':0,'row_cnt':0,'row_size':0}
               if ('Space used (total):' in line):
                 tsize = float(line.split(':')[1].strip())
                 if (tsize):
@@ -537,20 +484,19 @@ for cluster_url in data_url:
                   # astra pricing will be based on data on one set of data
                   # divide the total size by the total rf (gives the size per node)
                   try:
-                    astra_size += tsize / tbl_data[ks]['rf']
+                    type(tbl_data[ks])
                   except:
                     tbl_data[ks] = {}
                     tbl_data[ks]['rf'] = float(1)
-                    astra_size += tsize / tbl_data[ks]['rf']
                   try:
                     type(size_table[ks])
                   except:
                     size_table[ks] = {}
                   try:
                     type(size_table[ks][tbl])
-                    size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
+                    size_table[ks][tbl] += tsize
                   except:
-                    size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
+                    size_table[ks][tbl] = tsize
               elif ('Memtable data size:' in line):
                 tsize = float(line.split(':')[1].strip())
                 if (tsize):
@@ -558,20 +504,19 @@ for cluster_url in data_url:
                   # astra pricing will be based on data on one set of data
                   # divide the total size by the total rf (gives the size per node)
                   try:
-                    astra_size += tsize / tbl_data[ks]['rf']
+                    type(tbl_data[ks])
                   except:
                     tbl_data[ks] = {}
                     tbl_data[ks]['rf'] = float(1)
-                    astra_size += tsize / tbl_data[ks]['rf']
                   try:
                     type(size_table[ks])
                   except:
                     size_table[ks] = {}
                   try:
                     type(size_table[ks][tbl])
-                    size_table[ks][tbl] += tsize / tbl_data[ks]['rf']
+                    size_table[ks][tbl] += tsize
                   except:
-                    size_table[ks][tbl] = tsize / tbl_data[ks]['rf']
+                    size_table[ks][tbl] = tsize
               elif('Local read count: ' in line):
                 count = int(line.split(':')[1].strip())
                 if (count > 0):
@@ -586,21 +531,12 @@ for cluster_url in data_url:
                     read_table[ks][tbl] += count
                   except:
                     read_table[ks][tbl] = count
-              elif('Memtable cell count: ' in line):
-                count = int(line.split(':')[1].strip())
-                if (count > 0):
-                  table_row_size[ks][tbl]['cell_cnt'] += count
-              elif('Memtable data size: ' in line):
-                count = int(line.split(':')[1].strip())
-                if (count > 0):
-                  table_row_size[ks][tbl]['mem_size'] += count
               if (is_index == 0):
                 if('Local write count: ' in line):
                   count = int(line.split(':')[1].strip())
                   if (count > 0):
                     table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
                     try:
-                      astra_total_writes += count / tbl_data[ks]['rf']
                       total_writes += count
                     except:
                       total_writes += count
@@ -614,16 +550,6 @@ for cluster_url in data_url:
                     except:
                       write_table[ks][tbl] = count
 
-  # average row size by Memtable
-  for ks,memtbl in table_row_size.items():
-    for tbl,memdata in memtbl.items():
-      if memdata['cell_cnt']>0:
-        try:
-          table_row_size[ks][tbl]['row_cnt'] = memdata['cell_cnt'] / len(tbl_data[ks][tbl]['field'])
-          table_row_size[ks][tbl]['row_size'] = (memdata['mem_size'] / table_row_size[ks][tbl]['row_cnt'])
-        except:
-          table_row_size[ks][tbl]['row_cnt'] = 0
-
   # total up R/W across all nodes
   for ks,readtable in read_table.items():
     for tablename,tablecount in readtable.items():
@@ -631,16 +557,19 @@ for cluster_url in data_url:
   for ks,writetable in write_table.items():
     for tablename,tablecount in writetable.items():
       try:
-        astracount = tablecount / tbl_data[ks]['rf']
-        astra_write_count.append({'keyspace':ks,'table':tablename,'count':astracount})
         write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
       except:
-        astra_write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
         write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
+
+  # total up data size across all nodes
+  for ks,sizetable in size_table.items():
+    for tablename,tablesize in sizetable.items():
+      table_count.append({'keyspace':ks,'table':tablename,'count':tablesize})
 
   # sort R/W data
   read_count.sort(reverse=True,key=sortFunc)
   write_count.sort(reverse=True,key=sortFunc)
+  table_count.sort(reverse=True,key=sortFunc)
   total_rw = total_reads+total_writes
   
 
@@ -803,7 +732,6 @@ for cluster_url in data_url:
       'num_format': '[>999999999]0.000,,," GB";[>999999]0.000,," MB";0.000," KB"',
       'valign': 'top'})
       
-
   num_format3 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
@@ -849,10 +777,10 @@ for cluster_url in data_url:
       'font_color': 'white',
       'bg_color': '#EB6C34'})
 
-  ds_worksheet.merge_range('A1:I1', 'Table Size', title_format)
+  ds_worksheet.merge_range('A1:E1', 'Table Size', title_format)
 
-  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size','Memtable Row Size','Memtable # Rows','Avg Row Size','Sample # Rows']
-  ds_headers_width=[14,25,17,4,17,20,20,20,20]
+  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size']
+  ds_headers_width=[14,25,17,4,17]
 
   column=0
   for col_width in ds_headers_width:
@@ -875,39 +803,6 @@ for cluster_url in data_url:
   total_t_size = 0
   total_set_size = 0.0
   total_row = {'read':0,'write':0,'size':0}
-
-  for ks,t_data in size_table.items():
-    for tbl,t_size in t_data.items():
-      total_t_size += t_size
-      total_set_size += float(t_size)/float(tbl_data[ks]['rf'])
-      ds_worksheet.write(row,column,ks,data_format)
-      ds_worksheet.write(row,column+1,tbl,data_format)
-      ds_worksheet.write(row,column+2,t_size,num_format1)
-      ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
-      ds_worksheet.write(row,column+4,float(t_size)/float(tbl_data[ks]['rf']),num_format1)
-
-      if table_row_size[ks][tbl]['row_size']>0:
-        ds_worksheet.write(row,column+5,table_row_size[ks][tbl]['row_size'],num_format1)
-        ds_worksheet.write(row,column+6,table_row_size[ks][tbl]['row_cnt'],num_format1)
-      else:
-        ds_worksheet.write(row,column+5,"no data",num_format1)
-        ds_worksheet.write(row,column+6,"no data",num_format1)
-      try:
-        ds_worksheet.write(row,column+7,tbl_row_size[ks][tbl],num_format1)
-      except:
-        ds_worksheet.write(row,column+7,"no data",num_format1)
-      try:
-        ds_worksheet.write(row,column+8,t_size/tbl_row_size[ks][tbl],num_format1)
-      except:
-        ds_worksheet.write(row,column+8,"no data",num_format1)
-
-      row+=1
-      
-  total_row['size']=row
-
-  ds_worksheet.write(row,column,'Total',header_format4)
-  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',total_format1)
-  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',total_format1)
 
   cluster_name = ''
   prev_nodes = []
@@ -1066,10 +961,31 @@ for cluster_url in data_url:
         write_cmt(worksheet,chr(ord('@')+column+1)+'3',header)
       column+=1
 
+  row = 2
+  column = 0
+ 
+  for t_data in table_count:
+    ks = t_data['keyspace']
+    tbl = t_data['table']
+    cnt = t_data['count']
+    ds_worksheet.write(row,column,ks,data_format)
+    ds_worksheet.write(row,column+1,tbl,data_format)
+    ds_worksheet.write(row,column+2,cnt,total_format1)
+    ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
+    ds_worksheet.write(chr(ord('@')+column+5)+str(row+1),'='+chr(ord('@')+column+3)+str(row+1)+'/'+chr(ord('@')+column+4)+str(row+1),total_format1)
+
+    row+=1
+
+  total_row['size']=row
+
+  ds_worksheet.write(row,column,'Total',header_format4)
+  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',total_format1)
+  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',total_format1)
+
   row = 3
   perc_reads = 0.0
   column = 0
-  
+
   for reads in read_count:
     perc_reads = float(read_subtotal) / float(total_reads)
     ks = reads['keyspace']
@@ -1122,7 +1038,6 @@ for cluster_url in data_url:
       table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
     except:
       table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
-    astra_write_subtotal += float(cnt)/float(tbl_data[ks]['rf'])
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
     worksheet.write(row,column+2,cnt/len(tbl_data[ks][tbl]['field']),num_format1)
@@ -1232,7 +1147,7 @@ for cluster_url in data_url:
         row+=1
         column=0
 
-#  worksheet_chart.activate()
+  worksheet_chart.activate()
   workbook.close()
   print('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'
 exit();
