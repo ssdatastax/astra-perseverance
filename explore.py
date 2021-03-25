@@ -1019,7 +1019,7 @@ for cluster_url in data_url:
     except:
       table_totals[ks] = {}
     try:
-      if type(table_totals[ks])>1:
+      if tbl_data[ks]['rf']>1:
         div_by=2
       else:
         div_by=1
