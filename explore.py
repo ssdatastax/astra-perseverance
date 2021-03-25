@@ -236,28 +236,28 @@ comments = [
 'comment':["The number of write requests on the coordinator nodes during the nodes uptime, analogous to client writes."]
 },{
 'fields':['% Reads'],
-'comment':["The table's pecentage of the total read requests in the cluster."]
+'comment':["The table's pecentage of the total read requests in the cluster. (See comment in READ TPS)"]
 },{
 'fields':['% Writes'],
 'comment':["The table's pecentage of the total write requests in the cluster."]
 },{
 'fields':['R % RW'],
-'comment':["The table's pecentage of read requests of the total RW requests (read and Write) in the cluster."]
+'comment':["The table's pecentage of read requests of the total RW requests (read and Write) in the cluster. (See comment in READ TPS)"]
 },{
 'fields':['W % RW'],
-'comment':["The table's pecentage of write requests of the total RW requests (read and Write) in the cluster."]
+'comment':["The table's pecentage of write requests of the total RW requests (read and Write) in the cluster. (See comment in READ TPS)"]
 },{
 'fields':['Average TPS'],
-'comment':["The table's read or write request count divided by the uptime."]
+'comment':["The table's read or write request count divided by the uptime. (See comment in READ TPS)"]
 },{
 'fields':['Read TPS'],
-'comment':["The cluster's average read requests per second. The time is determined by the node's uptime."]
+'comment':["The cluster's average read requests per second based on a read consistancy level (CL) of LOCAL QUORUM and the local DC's replication factor (RF) of 3. If the read CL is set to LOCAL ONE, then the actual value will be up to 2X this number.  The time is determined by the node's uptime."]
 },{
 'fields':['Read TPMo'],
-'comment':["The cluster's average read requests per month. The month is calculated at 365.25/12 days."]
+'comment':["The cluster's average read requests per month (See comment in READ TPS). The month is calculated at 365.25/12 days."]
 },{
 'fields':['Write TPS'],
-'comment':["The cluster's average write requests per second. The time is determined by the node's uptime."]
+'comment':["The number of write requests per second on the coordinator nodes, analogous to client writes. The time is determined by the node's uptime."]
 },{
 'fields':['Write TPMo'],
 'comment':["The cluster's average write requests per month. The month is calculated at 365.25/12 days."]
@@ -266,22 +266,10 @@ comments = [
 'comment':["The combined uptime of all nodes in the cluster"]
 },{
 'fields':['Total R % RW'],
-'comment':["The total read requests percentage of combined RW requests (read and write) in the cluster."]
+'comment':["The total read requests percentage of combined RW requests (read and write) in the cluster. (See comment in READ TPS)"]
 },{
 'fields':['Total W % RW'],
-'comment':["The total write requests percentage of combined RW requests (read and write) in the cluster."]
-},{
-'fields':['Memtable Row Size'],
-'comment':["Average size of each record (row) in the memtables across all nodes."]
-},{
-'fields':['Memtable # Rows'],
-'comment':["The total number of records (rows) in the memtables across all nodes"]
-},{
-'fields':['Avg Row Size'],
-'comment':["The average size of each records (row) in tablehistograms across all nodes."]
-},{
-'fields':['Sample # Rows'],
-'comment':["The total number of records (rows) in tablehistograms across all nodes"]
+'comment':["The total write requests percentage of combined RW requests (read and write) in the cluster. (See comment in READ TPS)"]
 }
 ]
 
@@ -725,25 +713,46 @@ for cluster_url in data_url:
       'num_format': '#,##0.00',
       'valign': 'top'})
 
+  total_format = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '#,##0',
+      'valign': 'top'})
+
   total_format1 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
       'border': 1,
-      'num_format': '[>999999999]0.000,,," GB";[>999999]0.000,," MB";0.000," KB"',
+      'num_format': '[>999999]#,##0.00,," MB";[>999]0.00," KB";0',
+      'valign': 'top'})
+
+  total_format2 = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '[>999999]#,##0.00,," M";[>999]0.00," K";0',
+      'valign': 'top'})
+
+  tps_format = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': '#,##0',
       'valign': 'top'})
 
   tps_format1 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
       'border': 1,
-      'num_format': '[>999999999]0.000,,," GB/Sec";[>999999]0.000,," MB/Sec";0.000," KB/Sec"',
+      'num_format': '[>999999]#,##0.00,," (M)TPS";[>999]0.00," (K)TPS";0" TPS"',
       'valign': 'top'})
 
   tpmo_format1 = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
       'border': 1,
-      'num_format': '[>999999999]0.000,,," GB/Mo";[>999999]0.000,," MB/Mo";0.000," KB/Mo"',
+      'num_format': '[>999999]#,##0.00,," (M)TPMo";[>999]0.00," (K)TPMo";0" TPMo"',
       'valign': 'top'})
 
   num_format3 = workbook.add_format({
@@ -1020,8 +1029,8 @@ for cluster_url in data_url:
     read_subtotal += cnt
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt/div_by,num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/div_by,num_format2)
+    worksheet.write(row,column+2,cnt/div_by,total_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/div_by,tps_format1)
     worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1030,7 +1039,7 @@ for cluster_url in data_url:
   
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',total_format1)
+  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',total_format2)
   worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',tps_format1)
   worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
@@ -1054,8 +1063,8 @@ for cluster_url in data_url:
       table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt/len(tbl_data[ks][tbl]['field']),num_format1)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['write']/tbl_data[ks]['rf'],num_format2)
+    worksheet.write(row,column+2,cnt/tbl_data[ks]['rf'],total_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['write']/tbl_data[ks]['rf'],tps_format1)
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1064,7 +1073,7 @@ for cluster_url in data_url:
 
   worksheet.write(row,column,'Total',header_format4)
   write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',total_format1)
+  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',total_format2)
   worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',tps_format1)
   worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
@@ -1077,19 +1086,19 @@ for cluster_url in data_url:
   worksheet_chart.set_column(1,1,14)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),tps_format1)
+  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),tps_format)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',tps_format1)
+  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',tps_format)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),tps_format1)
+  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),tps_format)
   worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',tps_format1)
+  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',tps_format)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
-  worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1),total_format1)
+  worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1)+'/1000000000',total_format)
 
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
 
