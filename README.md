@@ -46,7 +46,7 @@ Table Count per DC;
 Wide Partitions (over 100 MB);
 SSTable Count (over 15);
 Read Latency (over 5ms);
-Write LAtency (over 1ms);
+Write Latency (over 1ms);
 Tombstones (Future version)
 
 
@@ -59,7 +59,7 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 
 <!-- GETTING STARTED -->
 ## Getting Started
-Install xlsxwriter and Pandas
+Install XlsxWriter and Pandas
 
 After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
 Note: If you are using the Cassandra Diagnostic Collection tool, it is easiest to collect a complete cluster diag tarball at once using:
