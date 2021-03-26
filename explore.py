@@ -211,7 +211,7 @@ for argnum,arg in enumerate(sys.argv):
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack'],'widths':[18,14,14,8,11],'extra':0,'comment':''})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime'],'widths':[18,14,14,8,11,15],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(th_drm)+' dropped mutations (cfstats)'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':th_tblcnt,'strip':'','extra':0,'comment':''})
@@ -333,6 +333,7 @@ for cluster_url in data_url:
 
   # collect and analyze schema
   ks = ''
+  dc_ks_rf = {}
   for node in os.listdir(rootPath):
     if (ks==''):
       ckpath = rootPath + node + '/nodetool'
@@ -344,6 +345,7 @@ for cluster_url in data_url:
         for line in schemaFile:
           line = line.strip('\n').strip()
           if("CREATE KEYSPACE" in line):
+            cur_rf = 0
             prev_ks = ks
             ks = line.split()[2].strip('"')
             tbl_data[ks] = {'cql':line,'rf':0}
@@ -355,6 +357,14 @@ for cluster_url in data_url:
                   prt_chk = "'"+dc_name+"':"
                   if (prt==prt_chk):
                     rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                    try:
+                      type(dc_ks_rf[dc_name])
+                    except:
+                      dc_ks_rf[dc_name] = {}
+                    try:
+                      type(dc_ks_rf[dc_name][ks])
+                    except:
+                      dc_ks_rf[dc_name][ks] = rf
                     tbl_data[ks]['rf']+=float(rf)
                   i+=1
               elif("'replication_factor':" in line):
@@ -363,6 +373,14 @@ for cluster_url in data_url:
                   prt_chk = "'replication_factor':"
                   if (prt==prt_chk):
                     rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                    try:
+                      type(dc_ks_rf[dc_name])
+                    except:
+                      dc_ks_rf[dc_name] = {}
+                    try:
+                      type(dc_ks_rf[dc_name][ks])
+                    except:
+                      dc_ks_rf[dc_name][ks] = rf
                     tbl_data[ks]['rf']+=float(rf)
                   i+=1
               else:tbl_data[ks]['rf']=float(1)
@@ -485,28 +503,11 @@ for cluster_url in data_url:
                     size_table[ks][tbl] += tsize
                   except:
                     size_table[ks][tbl] = tsize
-              elif ('Memtable data size:' in line):
-                tsize = float(line.split(':')[1].strip())
-                if (tsize):
-                  total_size += tsize
-                  # astra pricing will be based on data on one set of data
-                  # divide the total size by the total rf (gives the size per node)
-                  try:
-                    type(tbl_data[ks])
-                  except:
-                    tbl_data[ks] = {}
-                    tbl_data[ks]['rf'] = float(1)
-                  try:
-                    type(size_table[ks])
-                  except:
-                    size_table[ks] = {}
-                  try:
-                    type(size_table[ks][tbl])
-                    size_table[ks][tbl] += tsize
-                  except:
-                    size_table[ks][tbl] = tsize
               elif('Local read count: ' in line):
-                count = int(line.split(':')[1].strip())
+                try:
+                  count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                except:
+                  count = int(line.split(':')[1].strip())
                 if (count > 0):
                   total_reads += count
                   table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
@@ -521,7 +522,10 @@ for cluster_url in data_url:
                     read_table[ks][tbl] = count
               if (is_index == 0):
                 if('Local write count: ' in line):
-                  count = int(line.split(':')[1].strip())
+                  try:
+                    count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                  except:
+                    count = int(line.split(':')[1].strip())
                   if (count > 0):
                     table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
                     try:
@@ -641,12 +645,12 @@ for cluster_url in data_url:
   worksheet.freeze_panes(3,0)
   ds_worksheet = workbook.add_worksheet('Data Size')
   ds_worksheet.freeze_panes(2,2)
-  gc_worksheet = workbook.add_worksheet('GC Pauses')
-  gc_worksheet.freeze_panes(2,2)
   for sheet_array in sheets_data:
     if (sheet_array['sheet_name'] not in exclude_tab):
       stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
       stats_sheets[sheet_array['sheet_name']].freeze_panes(sheet_array['freeze_row'],sheet_array['freeze_col'])
+  gc_worksheet = workbook.add_worksheet('GC Pauses')
+  gc_worksheet.freeze_panes(2,2)
 
   # Create Formats
   header_format1 = workbook.add_format({
@@ -711,6 +715,13 @@ for cluster_url in data_url:
       'font_size': 11,
       'border': 1,
       'num_format': '#,##0.00',
+      'valign': 'top'})
+
+  day_format1 = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'num_format': 'dd \\d\\a\\y\\s hh:mm:ss',
       'valign': 'top'})
 
   total_format = workbook.add_format({
@@ -825,8 +836,7 @@ for cluster_url in data_url:
   column = 0
   total_t_size = 0
   total_set_size = 0.0
-  total_row = {'read':0,'write':0,'size':0}
-
+  total_row = {'read':0,'write':0,'size':0,'node':0}
   cluster_name = ''
   prev_nodes = []
   stat_sheets = {}
@@ -876,16 +886,27 @@ for cluster_url in data_url:
       if(node_status):
         status = rootPath + node + '/nodetool/status'
         statusFile = open(status, 'r')
-        
+        ro=1
         for line in statusFile:
           if('Datacenter:' in line):
-            datacenter = line.split(':')[1].strip()
+            dc_name = line.split(':')[1].strip()
           elif(line.count('.')>=3):
+            ro+=1
             values = line.split();
-            row_data = [values[1],datacenter,values[2] + ' ' + values[3],values[4],values[7]]
+            row_data = [values[1],dc_name,values[2] + ' ' + values[3],values[4],values[7]]
             write_row('node',row_data,data_format)
+            stats_sheets['node'].write(ro-1,5,float(node_uptime[values[1]])/60/60/24,day_format1)
             node_status=0
+#        exit(day_form)
+        stats_sheets['node'].write(4,4,'Avg Uptime',title_format)
 
+#        stats_sheets['node'].write(4,ro+1,'=TEXT(AVERAGE(F2:F'+str(ro)+')/(24*60*60),"dd \d\a\y\s hh:mm:ss")')
+        total_row['node'] = ro
+#        stats_sheets['node'].write('E'+str(ro+1),'Avg Uptime',title_format)
+        stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',day_format1)
+#        stats_sheets['node'].write_formula('F'+str(ro+1),'=sum(F2:F'+str(ro)+')/'+str(ro-1),data_format)
+#        total_row['node'] = ro
+      
       # collect data from the cfstats log file
       keyspace = ''
       table = ''
@@ -1018,19 +1039,12 @@ for cluster_url in data_url:
       type(table_totals[ks])
     except:
       table_totals[ks] = {}
-    try:
-      if tbl_data[ks]['rf']>1:
-        div_by=2
-      else:
-        div_by=1
-    except:
-      div_by=1
     table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
     read_subtotal += cnt
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt/div_by,total_format2)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['read']/div_by,tps_format1)
+    worksheet.write(row,column+2,cnt,total_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['read'],tps_format1)
     worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1063,8 +1077,8 @@ for cluster_url in data_url:
       table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
     worksheet.write(row,column,ks,data_format)
     worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt/tbl_data[ks]['rf'],total_format2)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['write']/tbl_data[ks]['rf'],tps_format1)
+    worksheet.write(row,column+2,cnt,total_format2)
+    worksheet.write(row,column+3,table_tps[ks][tbl]['write'],tps_format1)
     worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
     row+=1
@@ -1099,6 +1113,9 @@ for cluster_url in data_url:
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
   worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1)+'/1000000000',total_format)
+  worksheet_chart.write(row+5,column,'Average Uptime',title_format4)
+  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
+  worksheet_chart.write_formula('B7',"='Node Data'!F"+str(total_row['node']+1),day_format1)
 
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
 
