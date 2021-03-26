@@ -251,7 +251,7 @@ comments = [
 'comment':["The table's read or write request count divided by the uptime. (See comment in READ TPS)"]
 },{
 'fields':['Read TPS'],
-'comment':["The cluster's average read requests per second based on a read consistancy level (CL) of LOCAL QUORUM and the local DC's replication factor (RF) of 3. If the read CL is set to LOCAL ONE, then the actual value will be up to 2X this number.  The time is determined by the node's uptime."]
+'comment':["The cluster's average read requests per second based on a read consistancy level (CL) of LOCAL_xx.  The time is determined by the node's uptime."]
 },{
 'fields':['Read TPMo'],
 'comment':["The cluster's average read requests per month (See comment in READ TPS). The month is calculated at 365.25/12 days."]
@@ -813,10 +813,10 @@ for cluster_url in data_url:
       'font_color': 'white',
       'bg_color': '#EB6C34'})
 
-  ds_worksheet.merge_range('A1:E1', 'Table Size', title_format)
+  ds_worksheet.merge_range('A1:C1', 'Table Size', title_format)
 
-  ds_headers=['Keyspace','Table','Table Size','RF','Data Set Size']
-  ds_headers_width=[14,25,17,4,17]
+  ds_headers=['Keyspace','Table','Data Set Size']
+  ds_headers_width=[14,25,17]
 
   column=0
   for col_width in ds_headers_width:
@@ -899,15 +899,9 @@ for cluster_url in data_url:
             write_row('node',row_data,data_format)
             stats_sheets['node'].write(ro-1,5,float(node_uptime[values[1]])/60/60/24,day_format1)
             node_status=0
-#        exit(day_form)
         stats_sheets['node'].write(4,4,'Avg Uptime',title_format)
-
-#        stats_sheets['node'].write(4,ro+1,'=TEXT(AVERAGE(F2:F'+str(ro)+')/(24*60*60),"dd \d\a\y\s hh:mm:ss")')
         total_row['node'] = ro
-#        stats_sheets['node'].write('E'+str(ro+1),'Avg Uptime',title_format)
         stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',day_format1)
-#        stats_sheets['node'].write_formula('F'+str(ro+1),'=sum(F2:F'+str(ro)+')/'+str(ro-1),data_format)
-#        total_row['node'] = ro
       
       # collect data from the cfstats log file
       keyspace = ''
@@ -1017,16 +1011,13 @@ for cluster_url in data_url:
     ds_worksheet.write(row,column,ks,data_format)
     ds_worksheet.write(row,column+1,tbl,data_format)
     ds_worksheet.write(row,column+2,cnt,total_format1)
-    ds_worksheet.write(row,column+3,tbl_data[ks]['rf'],num_format1)
-    ds_worksheet.write(chr(ord('@')+column+5)+str(row+1),'='+chr(ord('@')+column+3)+str(row+1)+'/'+chr(ord('@')+column+4)+str(row+1),total_format1)
 
     row+=1
 
   total_row['size']=row
 
   ds_worksheet.write(row,column,'Total',header_format4)
-  ds_worksheet.write(row,column+2,'=SUM(C3:E'+ str(row)+')',total_format1)
-  ds_worksheet.write(row,column+4,'=SUM(E3:E'+ str(row)+')',total_format1)
+  ds_worksheet.write(row,column+2,'=SUM(C3:C'+ str(row)+')',total_format1)
 
   row = 3
   perc_reads = 0.0
@@ -1114,7 +1105,7 @@ for cluster_url in data_url:
   worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',tps_format)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
-  worksheet_chart.write_formula('B6',"='Data Size'!E"+str(total_row['size']+1)+'/1000000000',total_format)
+  worksheet_chart.write_formula('B6',"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',total_format)
   worksheet_chart.write(row+5,column,'Average Uptime',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
   worksheet_chart.write_formula('B7',"='Node Data'!F"+str(total_row['node']+1),day_format1)
