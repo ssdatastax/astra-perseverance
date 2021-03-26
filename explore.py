@@ -483,8 +483,11 @@ for cluster_url in data_url:
                 type(table_tps[ks][tbl])
               except:
                 table_tps[ks][tbl]={'write':0,'read':0}
-              if ('Space used (total):' in line):
-                tsize = float(line.split(':')[1].strip())
+              if ('Space used (live):' in line):
+                try:
+                  tsize = float(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                except:
+                  tsize = float(line.split(':')[1].strip())
                 if (tsize):
                   total_size += tsize
                   # astra pricing will be based on data on one set of data
@@ -520,27 +523,26 @@ for cluster_url in data_url:
                     read_table[ks][tbl] += count
                   except:
                     read_table[ks][tbl] = count
-              if (is_index == 0):
-                if('Local write count: ' in line):
+              if('Local write count: ' in line):
+                try:
+                  count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                except:
+                  count = int(line.split(':')[1].strip())
+                if (count > 0):
+                  table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
                   try:
-                    count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                    total_writes += count
                   except:
-                    count = int(line.split(':')[1].strip())
-                  if (count > 0):
-                    table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
-                    try:
-                      total_writes += count
-                    except:
-                      total_writes += count
-                    try:
-                      type(write_table[ks])
-                    except:
-                      write_table[ks] = {}
-                    try:
-                      type(write_table[ks][tbl])
-                      write_table[ks][tbl] += count
-                    except:
-                      write_table[ks][tbl] = count
+                    total_writes = count
+                  try:
+                    type(write_table[ks])
+                  except:
+                    write_table[ks] = {}
+                  try:
+                    type(write_table[ks][tbl])
+                    write_table[ks][tbl] += count
+                  except:
+                    write_table[ks][tbl] = count
 
   # total up R/W across all nodes
   for ks,readtable in read_table.items():
