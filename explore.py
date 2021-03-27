@@ -3,6 +3,21 @@
 #pip install xlsxwriter
 #pip install Pandas
 
+# Astra guardrail defaults
+gr_mv = 2         # Number of Materialized Views per table
+gr_ind = 1        # Number of Indexes per table
+gr_cind = 1       # Number of Custom Indexes per table
+
+# Cluster Heaalth threshhold defaults
+th_rl = 5         # Node read latency
+th_wl = 1         # Node write latency
+th_sstbl = 15     # SStable count per node/table
+th_gcp = 800      # Node P99 GC pause time
+th_drm = 100000   # Number of dropped mutations per node/table
+th_tblcnt = 100   # Number of tables in a keyspace
+th_wpar = 100     # Partition size in MB
+
+# tool imports
 import os.path
 from os import path
 import xlsxwriter
@@ -17,6 +32,22 @@ def write_cmt(wksht,coord,title,vis=0):
   for cmt_array in comments:
     if title in cmt_array['fields']:
       wksht.write_comment(coord,cmt_array['comment'][0],{'visible':vis,'font_size': 12,'x_scale': 2,'y_scale': 2})
+
+# check for guardrail
+def add_gr_tbl(gr,ks,tbl,src_ks,src_tbl):
+  if src_ks not in system_keyspace:
+    try:
+      type(gr_tbl_data[gr][src_ks])
+    except:
+      gr_tbl_data[gr][src_ks]={}
+    try:
+      type(gr_tbl_data[gr][src_ks][src_tbl])
+    except:
+      gr_tbl_data[gr][src_ks][src_tbl] = []
+    if (ks+'.'+tbl) not in gr_tbl_data[gr][src_ks][src_tbl]:
+      gr_tbl_data[gr][src_ks][src_tbl].append(ks+'.'+tbl)
+
+
 
 # collect the dc name for each node
 def get_dc(statuspath):
@@ -139,13 +170,6 @@ include_system = 0
 log_df = '%Y-%m-%d %H:%M:%S'
 dt_fmt = '%m/%d/%Y %I:%M%p'
 tz = {}
-th_rl = 5
-th_wl = 1
-th_sstbl = 15
-th_gcp = 800
-th_drm = 100000
-th_tblcnt = 100
-th_wpar = 100
 
 # communicate command line help
 for argnum,arg in enumerate(sys.argv):
@@ -188,8 +212,17 @@ for argnum,arg in enumerate(sys.argv):
       '-th_wpar               Threshold: Wide Partitions\n'\
       '                        Size of partition (MB)\n'\
       '                        to be listed in the Wide Partition tab\n'\
-      '                        Default Value: '+str(th_wpar)+'\n'
-    
+      '                        Default Value: '+str(th_wpar)+'\n'\
+      '-gr_mv                 Guardrails: Materialized Views\n'\
+      '                        Number of MV per table\n'\
+      '                        Default Value: '+str(gr_mv)+'\n'\
+      '-gr_ind                Guardrails: Indexes\n'\
+      '                        Number of Indexes per table\n'\
+      '                        Default Value: '+str(gr_ind)+'\n'\
+      '-gr_cind               Guardrails: Custom Indexs\n'\
+      '                        Number of Custom Indexes per table\n'\
+      '                        Default Value: '+str(gr_cind)+'\n'
+
     exit(help_content)
 
 # collect and analyze command line arguments
@@ -208,6 +241,18 @@ for argnum,arg in enumerate(sys.argv):
     th_tblcnt = float(sys.argv[argnum+1])
   elif(arg=='-th_wpar'):
     th_wpar = float(sys.argv[argnum+1])
+  elif(arg=='-gr_mv'):
+    gr_mv = float(sys.argv[argnum+1])
+  elif(arg=='-gr_ind'):
+    gr_ind = float(sys.argv[argnum+1])
+  elif(arg=='-gr_cind'):
+    gr_cind = float(sys.argv[argnum+1])
+
+gr_tbl_data = {
+    'Materialized Views':{'limit':gr_mv},
+    'Indexes':{'limit':gr_ind},
+    'Custom Indexes':{'limit':gr_cind}
+}
 
 # Organize primary support tab information
 sheets_data = []
@@ -314,6 +359,7 @@ for cluster_url in data_url:
   max_gc = {}
   exclude_tab = []
   node_uptime = {}
+  warnings = {'guardrails':{},'CLuster Health':{}}
 
   rootPath = cluster_url + '/nodes/'
 
@@ -334,100 +380,130 @@ for cluster_url in data_url:
   # collect and analyze schema
   ks = ''
   dc_ks_rf = {}
+  prev_node = ''
+  
   for node in os.listdir(rootPath):
-    if (ks==''):
-      ckpath = rootPath + node + '/nodetool'
-      if path.isdir(ckpath):
-        ks = ''
-        tbl = ''
-        create_stmt = {}
-        tbl_data = {}
-        for line in schemaFile:
-          line = line.strip('\n').strip()
-          if("CREATE KEYSPACE" in line):
-            cur_rf = 0
-            prev_ks = ks
-            ks = line.split()[2].strip('"')
-            tbl_data[ks] = {'cql':line,'rf':0}
-            rf=0;
-            for dc_name in dc_array:
-              if ("'"+dc_name+"':" in line):
-                i=0
-                for prt in line.split():
-                  prt_chk = "'"+dc_name+"':"
-                  if (prt==prt_chk):
-                    rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                    try:
-                      type(dc_ks_rf[dc_name])
-                    except:
-                      dc_ks_rf[dc_name] = {}
-                    try:
-                      type(dc_ks_rf[dc_name][ks])
-                    except:
-                      dc_ks_rf[dc_name][ks] = rf
-                    tbl_data[ks]['rf']+=float(rf)
-                  i+=1
-              elif("'replication_factor':" in line):
-                i=0
-                for prt in line.split():
-                  prt_chk = "'replication_factor':"
-                  if (prt==prt_chk):
-                    rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                    try:
-                      type(dc_ks_rf[dc_name])
-                    except:
-                      dc_ks_rf[dc_name] = {}
-                    try:
-                      type(dc_ks_rf[dc_name][ks])
-                    except:
-                      dc_ks_rf[dc_name][ks] = rf
-                    tbl_data[ks]['rf']+=float(rf)
-                  i+=1
-              else:tbl_data[ks]['rf']=float(1)
-          elif('CREATE INDEX' in line):
-            prev_tbl = tbl
-            tbl = line.split()[2].strip('"')
-            tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
-          elif('CREATE CUSTOM INDEX' in line):
-            prev_tbl = tbl
-            tbl = line.split()[2].strip('"')
-            tbl_data[ks][tbl] = {'type':'Custom Index', 'cql':line}
-          elif('CREATE TYPE' in line):
-            prev_tbl = tbl
-            tbl_line = line.split()[2].strip()
-            tbl = tbl_line.split('.')[1].strip().strip('"')
-            tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
-            tbl_data[ks][tbl]['field'] = {}
-          elif('CREATE TABLE' in line):
-            prev_tbl = tbl
-            tbl_line = line.split()[2].strip()
-            tbl = tbl_line.split('.')[1].strip().strip('"')
-            tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
-            tbl_data[ks][tbl]['field'] = {}
-          elif('CREATE MATERIALIZED VIEW' in line ):
-            prev_tbl = tbl
-            tbl_line = line.split()[3].strip()
-            tbl = tbl_line.split('.')[1].strip().strip('"')
-            tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
-            tbl_data[ks][tbl]['field'] = {}
-          elif('PRIMARY KEY' in line):
-            if(line.count('(') == 1):
-              tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
-              tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
-              del tbl_data[ks][tbl]['cc'][0]
-            elif(line.count('(') == 2):
-              tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
-              tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
-            tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
-          elif line != '' and line.strip() != ');':
-            try:
-              tbl_data[ks][tbl]['cql'] += ' ' + line
-              if('AND ' not in line and ' WITH ' not in line):
-                fld_name = line.split()[0]
-                fld_type = line.split()[1].strip(',')
-                tbl_data[ks][tbl]['field'][fld_name]=fld_type
-            except:
-              print('Error1:' + ks + '.' + tbl + ' - ' + line)
+    if (prev_node==''):
+      if (ks==''):
+        ckpath = rootPath + node + '/nodetool'
+        if path.isdir(ckpath):
+          prev_node=node
+          ks = ''
+          tbl = ''
+          create_stmt = {}
+          tbl_data = {}
+          for line in schemaFile:
+            line = line.strip('\n').strip()
+            if (line==''): tbl=''
+            if("CREATE KEYSPACE" in line):
+              cur_rf = 0
+              prev_ks = ks
+              ks = line.split()[2].strip('"')
+              tbl_data[ks] = {'cql':line,'rf':0}
+              rf=0;
+              for dc_name in dc_array:
+                if ("'"+dc_name+"':" in line):
+                  i=0
+                  for prt in line.split():
+                    prt_chk = "'"+dc_name+"':"
+                    if (prt==prt_chk):
+                      rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                      try:
+                        type(dc_ks_rf[dc_name])
+                      except:
+                        dc_ks_rf[dc_name] = {}
+                      try:
+                        type(dc_ks_rf[dc_name][ks])
+                      except:
+                        dc_ks_rf[dc_name][ks] = rf
+                      tbl_data[ks]['rf']+=float(rf)
+                    i+=1
+                elif("'replication_factor':" in line):
+                  i=0
+                  for prt in line.split():
+                    prt_chk = "'replication_factor':"
+                    if (prt==prt_chk):
+                      rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                      try:
+                        type(dc_ks_rf[dc_name])
+                      except:
+                        dc_ks_rf[dc_name] = {}
+                      try:
+                        type(dc_ks_rf[dc_name][ks])
+                      except:
+                        dc_ks_rf[dc_name][ks] = rf
+                      tbl_data[ks]['rf']+=float(rf)
+                    i+=1
+                else:tbl_data[ks]['rf']=float(1)
+            elif('CREATE INDEX' in line):
+              prev_tbl = tbl
+              tbl = line.split()[2].strip('"')
+              tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
+              src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+              src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+              add_gr_tbl('Indexes',ks,tbl,src_ks,src_tbl)
+              tbl=''
+            elif('CREATE CUSTOM INDEX' in line):
+              prev_tbl = tbl
+              tbl = line.split()[3].strip('"')
+              tbl_data[ks][tbl] = {'type':'Custom Index', 'cql':line}
+              src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+              src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+              add_gr_tbl('Custom Indexes',ks,tbl,src_ks,src_tbl)
+              tbl=''
+            elif('CREATE TYPE' in line):
+              prev_tbl = tbl
+              tbl_line = line.split()[2].strip('"')
+              tbl = tbl_line.split('.')[1].strip().strip('"')
+              tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
+              tbl_data[ks][tbl]['field'] = {}
+            elif('CREATE TABLE' in line):
+              prev_tbl = tbl
+              tbl_line = line.split()[2].strip('"')
+              tbl = tbl_line.split('.')[1].strip().strip('"')
+              tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
+              tbl_data[ks][tbl]['field'] = {}
+            elif('CREATE MATERIALIZED VIEW' in line ):
+              prev_tbl = tbl
+              tbl_line = line.split()[3].strip('"')
+              tbl = tbl_line.split('.')[1].strip().strip('"')
+              tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
+              tbl_data[ks][tbl]['field'] = {}
+            if (tbl <>''):
+              if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
+                src_ks = line.split('.')[0].split()[1].strip('"')
+                src_tbl = line.split('.')[1].strip('"')
+                add_gr_tbl('Materialized Views',ks,tbl,src_ks,src_tbl)
+              elif('PRIMARY KEY' in line):
+                if(line.count('(') == 1):
+                  tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
+                  tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
+                  del tbl_data[ks][tbl]['cc'][0]
+                elif(line.count('(') == 2):
+                  tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
+                  tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
+                tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
+              elif line.strip() != ');':
+                try:
+                  tbl_data[ks][tbl]['cql'] += ' ' + line
+                  if('AND ' not in line and ' WITH ' not in line):
+                    fld_name = line.split()[0]
+                    fld_type = line.split()[1].strip(',')
+                    tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                except:
+                  print('Error1:' + ks + '.' + tbl + ' - ' + line)
+
+  # guardrails
+  #for gr_name, ks_array in gr_tbl_data.items():
+  #  lmt = gr_tbl_data[gr_name]['limit']
+  #  try: type(warnings['guardrails'][gr_name])
+  #  except: warnings['guardrails'][gr_name] = []
+  #  for ks,tbl_array in ks_array.items():
+  #    for tbl,gr_array in tbl_array.items():
+  #      if len(gr_array)>lmt:
+  #        warnings['guardrails'][gr_name].append('More than '+str(int(lmt))+' '+gr_name+' for '+ks+'.'+tbl)
+   #       print('More than '+str(int(lmt))+' '+gr_name+' for '+ks+'.'+tbl)
+  #exit()
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
