@@ -11,12 +11,12 @@ gr_ind = 1        # Number of indexes per table
 gr_cind = 1       # Number of custom indexes per table
 gr_tblcnt = 100   # Number of tables in a keyspace
 gr_fldcnt = 50    # Number of fields in a table
-gr_lpar = 50      # Partition size in MB
+gr_lpar = 50      # Partition size (MB)
 
 
 # Cluster Heaalth threshhold defaults
-th_rl = 5         # Node read latency
-th_wl = 1         # Node write latency
+th_rl = 50        # Node read latency (ms)
+th_wl = 10        # Node write latency (ms)
 th_sstbl = 15     # SStable count per node/table
 th_gcp = 800      # Node P99 GC pause time
 th_drm = 100000   # Number of dropped mutations per node/table
