@@ -2,6 +2,8 @@
 
 #pip install xlsxwriter
 #pip install Pandas
+# Astra Perseverance Version
+version = "1.0.0"
 
 # Astra guardrail defaults
 gr_mv = 2         # Number of Materialized Views per table
@@ -115,14 +117,16 @@ def get_gc_data(level,name,gcpause,is_node):
     gc_data[name].update({'Name':str(name)})
     gc_data[name].update({'Pauses':str(gcnum)})
     if(gcnum):
-        gc_data[name].update({'Min':str(gcpause[min_pos])})
-        gc_data[name].update({'P50':str(gcpause[p50_pos])})
-        gc_data[name].update({'P75':str(gcpause[p75_pos])})
-        gc_data[name].update({'P90':str(gcpause[p90_pos])})
-        gc_data[name].update({'P95':str(gcpause[p95_pos])})
-        gc_data[name].update({'P98':str(gcpause[p98_pos])})
-        gc_data[name].update({'P99':str(gcpause[p99_pos])})
-        gc_data[name].update({'Max':str(gcpause[max_pos])})
+      gc_data[name].update({'Min':str(gcpause[min_pos])})
+      gc_data[name].update({'P50':str(gcpause[p50_pos])})
+      gc_data[name].update({'P75':str(gcpause[p75_pos])})
+      gc_data[name].update({'P90':str(gcpause[p90_pos])})
+      gc_data[name].update({'P95':str(gcpause[p95_pos])})
+      gc_data[name].update({'P98':str(gcpause[p98_pos])})
+      gc_data[name].update({'P99':str(gcpause[p99_pos])})
+      gc_data[name].update({'Max':str(gcpause[max_pos])})
+      if (level=='Cluster' and gcpause[p99_pos] > th_gcp):
+        warnings['Cluster Health']['GC Pauses']=['P99 GC pause greater than '+str(int(th_gcp))]
     else:
       gc_data[name].update({'Min':'N/A'})
       gc_data[name].update({'P50':'N/A'})
@@ -188,6 +192,7 @@ for argnum,arg in enumerate(sys.argv):
       '                        Multiple diag folders accepted\n'\
       '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
       'optional arguments:\n'\
+      '-v, --version          Version\n'\
       '-h, --help             This help info\n'\
       '-th_rl                 Threshold: Read Latency\n'\
       '                        Local read time(ms) in the cfstats log \n'\
@@ -222,8 +227,9 @@ for argnum,arg in enumerate(sys.argv):
       '-gr_cind               Guardrails: Custom Indexs\n'\
       '                        Number of Custom Indexes per table\n'\
       '                        Default Value: '+str(gr_cind)+'\n'
-
     exit(help_content)
+  elif(arg=='-v' or arg =='--version'):
+    exit("Version " + version)
 
 # collect and analyze command line arguments
 for argnum,arg in enumerate(sys.argv):
@@ -241,6 +247,8 @@ for argnum,arg in enumerate(sys.argv):
     th_tblcnt = float(sys.argv[argnum+1])
   elif(arg=='-th_wpar'):
     th_wpar = float(sys.argv[argnum+1])
+  elif(arg=='-th_gcp'):
+    th_gcp = float(sys.argv[argnum+1])
   elif(arg=='-gr_mv'):
     gr_mv = float(sys.argv[argnum+1])
   elif(arg=='-gr_ind'):
@@ -256,7 +264,7 @@ gr_tbl_data = {
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime'],'widths':[18,14,14,8,11,15],'extra':0,'comment':''})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(th_drm)+' dropped mutations (cfstats)'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':th_tblcnt,'strip':'','extra':0,'comment':''})
@@ -359,7 +367,7 @@ for cluster_url in data_url:
   max_gc = {}
   exclude_tab = []
   node_uptime = {}
-  warnings = {'guardrails':{},'CLuster Health':{}}
+  warnings = {'Astra Guardrails':{},'Cluster Health':{}}
 
   rootPath = cluster_url + '/nodes/'
 
@@ -473,7 +481,7 @@ for cluster_url in data_url:
               if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
                 src_ks = line.split('.')[0].split()[1].strip('"')
                 src_tbl = line.split('.')[1].strip('"')
-                add_gr_tbl('Materialized Views',ks,tbl,src_ks,src_tbl)
+                add_gr_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
               elif('PRIMARY KEY' in line):
                 if(line.count('(') == 1):
                   tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
@@ -492,18 +500,6 @@ for cluster_url in data_url:
                     tbl_data[ks][tbl]['field'][fld_name]=fld_type
                 except:
                   print('Error1:' + ks + '.' + tbl + ' - ' + line)
-
-  # guardrails
-  #for gr_name, ks_array in gr_tbl_data.items():
-  #  lmt = gr_tbl_data[gr_name]['limit']
-  #  try: type(warnings['guardrails'][gr_name])
-  #  except: warnings['guardrails'][gr_name] = []
-  #  for ks,tbl_array in ks_array.items():
-  #    for tbl,gr_array in tbl_array.items():
-  #      if len(gr_array)>lmt:
-  #        warnings['guardrails'][gr_name].append('More than '+str(int(lmt))+' '+gr_name+' for '+ks+'.'+tbl)
-   #       print('More than '+str(int(lmt))+' '+gr_name+' for '+ks+'.'+tbl)
-  #exit()
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
@@ -712,6 +708,27 @@ for cluster_url in data_url:
   dc_list = list(dict.fromkeys(dc_list))
   dc_list.sort()
 
+
+  # Astra Guardrails
+  gr = 'Astra Guardrails'
+  for gr_name, ks_array in gr_tbl_data.items():
+    lmt = gr_tbl_data[gr_name]['limit']
+    try: type(warnings[gr][gr_name])
+    except: warnings[gr][gr_name] = []
+    for ks,tbl_array in ks_array.items():
+      if (ks<>'limit'):
+        for tbl,gr_array in tbl_array.items():
+          if len(gr_array)>lmt:
+            warnings[gr][gr_name].append('More than '+str(int(lmt))+' '+gr_name+' of '+ks+'.'+tbl)
+#            print(('More than '+str(int(lmt))+' '+gr_name+' of '+ks+'.'+tbl)
+
+  # Potential Performance Issues
+
+
+
+
+
+
   # Create Workbook
   stats_sheets = {}
   worksheet = {}
@@ -756,14 +773,36 @@ for cluster_url in data_url:
   header_format4 = workbook.add_format({
       'bold': True,
       'text_wrap': False,
-      'font_size': 11,
+      'font_size': 12,
       'border': 1,
       'font_color': 'white',
       'bg_color': '#3980D3',
       'valign': 'top'})
-      
+
+  header_format5 = workbook.add_format({
+      'bold': True,
+      'text_wrap': False,
+      'font_size': 15,
+      'border': 1,
+      'font_color': 'white',
+      'bg_color': '#3980D3',
+      'valign': 'top'})
+
   data_format = workbook.add_format({
       'text_wrap': False,
+      'font_size': 11,
+      'border': 1,
+      'valign': 'top'})
+
+  data_format_lg = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 13,
+      'border': 1,
+      'align': 'right',
+      'valign': 'top'})
+
+  data_format1 = workbook.add_format({
+      'text_wrap': True,
       'font_size': 11,
       'border': 1,
       'valign': 'top'})
@@ -772,6 +811,13 @@ for cluster_url in data_url:
       'text_wrap': False,
       'font_size': 11,
       'italic': True,
+      'valign': 'top'})
+
+  data_format3 = workbook.add_format({
+      'text_wrap': True,
+      'font_size': 11,
+      'border': 1,
+      'align': 'right',
       'valign': 'top'})
       
   perc_format = workbook.add_format({
@@ -802,9 +848,23 @@ for cluster_url in data_url:
       'num_format': 'dd \\d\\a\\y\\s hh:mm:ss',
       'valign': 'top'})
 
+  day_format_lg = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 13,
+      'border': 1,
+      'num_format': 'dd \\d\\a\\y\\s hh:mm:ss',
+      'valign': 'top'})
+
   total_format = workbook.add_format({
       'text_wrap': False,
       'font_size': 11,
+      'border': 1,
+      'num_format': '#,##0',
+      'valign': 'top'})
+
+  total_format_lg = workbook.add_format({
+      'text_wrap': False,
+      'font_size': 13,
       'border': 1,
       'num_format': '#,##0',
       'valign': 'top'})
@@ -823,9 +883,9 @@ for cluster_url in data_url:
       'num_format': '[>999999]#,##0.00,," M";[>999]0.00," K";0',
       'valign': 'top'})
 
-  tps_format = workbook.add_format({
+  num_format_lg = workbook.add_format({
       'text_wrap': False,
-      'font_size': 11,
+      'font_size': 13,
       'border': 1,
       'num_format': '#,##0',
       'valign': 'top'})
@@ -873,7 +933,7 @@ for cluster_url in data_url:
       
   title_format3 = workbook.add_format({
       'bold': 1,
-      'font_size': 14,
+      'font_size': 17,
       'border': 1,
       'align': 'center',
       'valign': 'vcenter',
@@ -882,7 +942,7 @@ for cluster_url in data_url:
 
   title_format4 = workbook.add_format({
       'bold': 1,
-      'font_size': 13,
+      'font_size': 14,
       'border': 1,
       'align': 'left',
       'valign': 'vcenter',
@@ -973,12 +1033,13 @@ for cluster_url in data_url:
             values = line.split();
             row_data = [values[1],dc_name,values[2] + ' ' + values[3],values[4],values[7]]
             write_row('node',row_data,data_format)
-            stats_sheets['node'].write(ro-1,5,float(node_uptime[values[1]])/60/60/24,day_format1)
+            stats_sheets['node'].write(ro-1,5,float(node_uptime[values[1]]),total_format2)
+            stats_sheets['node'].write_formula('G'+str(ro),'=INT(F'+str(ro)+'/86400) & " days " & TEXT((F'+str(ro)+'/86400)-INT(F'+str(ro)+'/86400),"hh:mm:ss")',data_format3)
             node_status=0
-        stats_sheets['node'].write(4,4,'Avg Uptime',title_format)
+        stats_sheets['node'].write(ro,4,'Avg Uptime',title_format)
         total_row['node'] = ro
-        stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',day_format1)
-      
+        stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
+        stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
       # collect data from the cfstats log file
       keyspace = ''
       table = ''
@@ -1002,6 +1063,10 @@ for cluster_url in data_url:
                 if (sheet_array['filter_type']):
                   value = value.strip(sheet_array['strip'])
                   if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
+                    try:
+                      type(warnings['Cluster Health'][sheet_array['tab_name']])
+                    except:
+                      warnings['Cluster Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
                     if(sheet_array['sheet_name']=='partition'):
                       row_data[4] = str(int(value)/1000000)
                     if(sheet_array['extra']):
@@ -1055,6 +1120,76 @@ for cluster_url in data_url:
           write_row('ph',row_data,data_format,[6])
           prev_nodes.append(nodeid)
 
+  # create GC Pause tab
+  gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
+  gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
+  gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
+
+  prev_dc=0
+  row=0
+  column=0
+  for header in gc_headers:
+    gc_worksheet.write(row,column,header,title_format)
+    write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),header)
+    column+=1
+
+  for col_num,col_width in enumerate(gc_widths):
+    gc_worksheet.set_column(col_num,col_num,col_width)
+
+  column=0
+  for name, gc_val in gc_data.items():
+    if(gc_val['Level']=='Cluster'):
+      row+=1
+      for field in gc_fields:
+        if(field=='From'):
+          gc_worksheet.write(row,column,oldest_gc[name]['dt'],data_format)
+        elif(field=='To'):
+          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+        elif(field=='max_gc'):
+          gc_worksheet.write(row,column,max_gc[name])
+        else:
+          gc_worksheet.write(row,column,gc_val[field])
+        column+=1
+      row+=1
+      column=0
+
+  dc_count=0
+  for name, gc_val in gc_data.items():
+    if(gc_val['Level']=='DC'):
+      dc_count += 1
+      for field in gc_fields:
+        if(field=='From'):
+          gc_worksheet.write(row,column,oldest_gc[name]['dt'])
+        elif(field=='To'):
+          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+        elif(field=='max_gc'):
+          gc_worksheet.write(row,column,max_gc[name])
+        elif(gc_val[field]):
+          gc_worksheet.write(row,column,gc_val[field])
+        column+=1
+
+      row+=1
+      column=0
+
+  for dc_name in dc_list:
+    for name, gc_val in gc_data.items():
+      node_ip = gc_val['Name']
+      if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
+        for field in gc_fields:
+          if(field=='Level'):
+            gc_worksheet.write(row,column,node_dc[gc_val['Name']])
+          elif(field=='From'):
+            gc_worksheet.write(row,column,oldest_gc[name]['dt'])
+          elif(field=='To'):
+            gc_worksheet.write(row,column,newest_gc[name]['dt'])
+          elif(field=='max_gc'):
+            gc_worksheet.write(row,column,max_gc[name])
+          elif(gc_val[field]):
+            gc_worksheet.write(row,column,gc_val[field])
+          column+=1
+        row+=1
+        column=0
+  
   # create workload tab
   wl_headers=['Keyspace','Table','Read Requests','Average TPS','% Reads','R % RW','','Keyspace','Table','Write Requests','Average TPS','% Writes','W % RW']
   wl_headers_width=[14,25,17,13,9,9,3,14,25,17,13,9,9]
@@ -1162,99 +1297,50 @@ for cluster_url in data_url:
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
   # create the Astra Chart tab
-  row=1
+  worksheet_chart.set_column(0,0,30)
+  worksheet_chart.set_column(1,1,20)
+
+  row=2
   column=0
   worksheet_chart.merge_range('A1:B1', 'Astra Conversion Info for '+cluster_name, title_format3)
-  worksheet_chart.set_column(0,0,25)
-  worksheet_chart.set_column(1,1,14)
+  worksheet_chart.merge_range('A2:B2', 'Workload Summary', header_format5)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write_formula('B2','=Workload!D'+str(total_row['read']+1),tps_format)
+  worksheet_chart.write_formula('B'+str(row+1),'=Workload!D'+str(total_row['read']+1),num_format_lg)
   worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write_formula('B3','=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',tps_format)
+  worksheet_chart.write_formula('B'+str(row+2),'=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',num_format_lg)
   worksheet_chart.write(row+2,column,'Write TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write_formula('B4','=Workload!K'+str(total_row['write']+1),tps_format)
+  worksheet_chart.write_formula('B'+str(row+3),'=Workload!K'+str(total_row['write']+1),num_format_lg)
   worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write_formula('B5','=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',tps_format)
+  worksheet_chart.write_formula('B'+str(row+4),'=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',num_format_lg)
   worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
-  worksheet_chart.write_formula('B6',"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',total_format)
+  worksheet_chart.write_formula('B'+str(row+5),"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',num_format_lg)
   worksheet_chart.write(row+5,column,'Average Uptime',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
-  worksheet_chart.write_formula('B7',"='Node Data'!F"+str(total_row['node']+1),day_format1)
+  worksheet_chart.write_formula('B'+str(row+6),"='Node Data'!G"+str(total_row['node']+1),data_format_lg)
 
-  gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
-
-  gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
-  gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
-
-  prev_dc=0
-  row=0
-  column=0
-  for header in gc_headers:
-    gc_worksheet.write(row,column,header,title_format)
-    write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),header)
-    column+=1
-
-  for col_num,col_width in enumerate(gc_widths):
-    gc_worksheet.set_column(col_num,col_num,col_width)
-
-  column=0
-  for name, gc_val in gc_data.items():
-    if(gc_val['Level']=='Cluster'):
-      row+=1
-      for field in gc_fields:
-        if(field=='From'):
-          gc_worksheet.write(row,column,oldest_gc[name]['dt'],data_format)
-        elif(field=='To'):
-          gc_worksheet.write(row,column,newest_gc[name]['dt'])
-        elif(field=='max_gc'):
-          gc_worksheet.write(row,column,max_gc[name])
-        else:
-          gc_worksheet.write(row,column,gc_val[field])
-        column+=1
-      row+=1
-      column=0
-
-  dc_count=0
-  for name, gc_val in gc_data.items():
-    if(gc_val['Level']=='DC'):
-      dc_count += 1
-      for field in gc_fields:
-        if(field=='From'):
-          gc_worksheet.write(row,column,oldest_gc[name]['dt'])
-        elif(field=='To'):
-          gc_worksheet.write(row,column,newest_gc[name]['dt'])
-        elif(field=='max_gc'):
-          gc_worksheet.write(row,column,max_gc[name])
-        elif(gc_val[field]):
-          gc_worksheet.write(row,column,gc_val[field])
-        column+=1
-
-      row+=1
-      column=0
-
-  for dc_name in dc_list:
-    for name, gc_val in gc_data.items():
-      node_ip = gc_val['Name']
-      if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
-        for field in gc_fields:
-          if(field=='Level'):
-            gc_worksheet.write(row,column,node_dc[gc_val['Name']])
-          elif(field=='From'):
-            gc_worksheet.write(row,column,oldest_gc[name]['dt'])
-          elif(field=='To'):
-            gc_worksheet.write(row,column,newest_gc[name]['dt'])
-          elif(field=='max_gc'):
-            gc_worksheet.write(row,column,max_gc[name])
-          elif(gc_val[field]):
-            gc_worksheet.write(row,column,gc_val[field])
-          column+=1
+  row+=7
+  start_row=row
+  for warn_cat_title,warn_cat_array in warnings.items():
+    row+=1
+    worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_cat_title,header_format5)
+    row+=1
+    for warn_title,warn_array in warn_cat_array.items():
+      if (len(warn_array)):
+        worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_title,title_format4)
+        write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row),warn_title)
         row+=1
-        column=0
+        for warn in warn_array:
+          worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn,data_format1)
+          row+=1
+  if (row==start_row):
+    worksheet_chart.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
+    row+=2
+
 
   worksheet_chart.activate()
   workbook.close()
