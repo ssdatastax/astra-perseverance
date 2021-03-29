@@ -61,16 +61,20 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 <!-- ITEMS ANALYZED -->
 ## Items Analyzed
 The following items are checked with Astra Perseverance:
+
 Astra Guardrails
- - Number of materialized views per table
+
+- Number of materialized views per table
  - Number of indexes per table
  - Number of custom indexes per table
  - Number of tables in a keyspace
  - Number of fields in a table
  - Partition size (MB)
  - Use of UDA and UDF
+
 Cluster Health
- - Node read latency (ms)
+
+- Node read latency (ms)
  - Node write latency (ms)
  - Node P99 GC pause time
  - Number of dropped mutations per node/table
