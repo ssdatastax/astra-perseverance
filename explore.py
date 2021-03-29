@@ -11,23 +11,23 @@ gr_ind = 1        # Number of indexes per table
 gr_cind = 1       # Number of custom indexes per table
 gr_tblcnt = 100   # Number of tables in a keyspace
 gr_fldcnt = 50    # Number of fields in a table
-gr_lpar = 100      # Partition size (MB)
+gr_lpar = 100     # Partition size (MB)
 
 
 # Cluster Heaalth threshhold defaults
-th_rl = 100        # Node read latency (ms)
-th_wl = 100        # Node write latency (ms)
+th_rl = 100       # Node read latency (ms)
+th_wl = 100       # Node write latency (ms)
 th_sstbl = 20     # SStable count per node/table
 th_gcp = 800      # Node P99 GC pause time
 th_drm = 100000   # Number of dropped mutations per node/table
 
-script_notice = 'Astra Perseverance\n'\
+info_box = 'Astra Perseverance\n'\
                 'Version '+version+'\n'\
                 'This script is intended to be used as a guide.  Not all guardrails\n'\
                 'are included in this sheet. Please view current Astra guardrials at\n'\
-                'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n'\
-                'The following items are checked with Astra Perseverance:\n'\
-                'Guardrails\n'\
+                'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n\n'\
+                'The following items are analyzed with Astra Perseverance:\n'\
+                'Astra Guardrails\n'\
                 ' - Number of materialized views per table : >'+str(gr_mv)+'\n'\
                 ' - Number of indexes per table : >'+str(gr_ind)+'\n'\
                 ' - Number of custom indexes per table : >'+str(gr_cind)+'\n'\
@@ -39,9 +39,12 @@ script_notice = 'Astra Perseverance\n'\
                 ' - Node read latency (ms) : >'+str(th_rl)+'\n'\
                 ' - Node write latency (ms) : >'+str(th_wl)+'\n'\
                 ' - Node P99 GC pause time : >'+str(th_gcp)+'\n'\
+                ' - Number of SSTables per node/table : >'+str(th_sstbl)+'\n'\
                 ' - Number of dropped mutations per node/table : >'+str(th_drm)+'\n\n'\
                 'Supported data in separate spreadsheet tabs'
- 
+
+#
+info_box_options = {'width': 500,'height': 400,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
 
 # tool imports
 import os.path
@@ -1374,7 +1377,7 @@ for cluster_url in data_url:
 
   row=2
   column=0
-  worksheet_chart.merge_range('A1:B1', 'Astra Conversion Info for '+cluster_name, title_format3)
+  worksheet_chart.merge_range('A1:B1', 'Astra Migration Data for '+cluster_name, title_format3)
   worksheet_chart.merge_range('A2:B2', 'Workload Summary', header_format5)
   worksheet_chart.write(row,column,'Read TPS',title_format4)
   write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
@@ -1413,19 +1416,7 @@ for cluster_url in data_url:
     worksheet_chart.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
     row+=2
 
-
-
-  options = {
-      'width': 600,
-      'height': 350,
-      'x_offset': 10,
-      'y_offset': 10,
-
-      'font': {'color': '#3A3A42',
-               'size': 12}
-  }
-
-  worksheet_chart.insert_textbox('D2', script_notice, options)
+  worksheet_chart.insert_textbox('D2',info_box,info_box_options)
 
   worksheet_chart.activate()
   workbook.close()
