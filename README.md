@@ -5,6 +5,7 @@
 
 * [Summary](#summary)
 * [Script Origins](#origins-of-the-code)
+* [Items Analyzed](#items-analyzed)
 * [Getting Started](#getting-started)
 * [Creating the Spreadsheet](#using-the-cluster-load-spreadsheet)
 
@@ -56,6 +57,24 @@ Tombstones (Future version)
 This code was created to assist in identifying write and read calls per month for use of estimating Astra usage costs.  For so long, the max tps ruled everything.  Environments were built on the daily, weekly or monthly max loads.  Now that there is a Cassandra DBaaS - DataStax Astra (https://astra.datastax.com) with prices based on averages, the nessesity to get average transaction numbers is important. Enjoy!! 
 
 The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Perseverance.  It's purpose is to gather and communicate information about Mars.   
+
+<!-- ITEMS ANALYZED -->
+## Items Analyzed
+The following items are checked with Astra Perseverance:
+Astra Guardrails
+ - Number of materialized views per table
+ - Number of indexes per table
+ - Number of custom indexes per table
+ - Number of tables in a keyspace
+ - Number of fields in a table
+ - Partition size (MB)
+ - Use of UDA and UDF
+Cluster Health
+ - Node read latency (ms)
+ - Node write latency (ms)
+ - Node P99 GC pause time
+ - Number of dropped mutations per node/table
+
 
 <!-- GETTING STARTED -->
 ## Getting Started
