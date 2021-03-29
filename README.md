@@ -43,13 +43,13 @@ Node R/W Latency Proxihistogram
 Dropped Mutations
  * Count (Node/DC/Keyspace/Table)
 
-Table Count per DC;
-Wide Partitions (over 100 MB);
-SSTable Count (over 15);
-Read Latency (over 5ms);
-Write Latency (over 1ms);
-Tombstones (Future version)
-
+A list of the following above a threshhold value
+ * Table Count per DC;
+ * Large Partitions;
+ * SSTable Count;
+ * Read Latency (over 5ms);
+ * Write Latency (over 1ms);
+ * Tombstones (Future version)
 
 
 <!-- ORIGINS OF THE CODE -->
