@@ -5,6 +5,7 @@
 
 * [Summary](#summary)
 * [Script Origins](#origins-of-the-code)
+* [Items Analyzed](#items-analyzed)
 * [Getting Started](#getting-started)
 * [Creating the Spreadsheet](#using-the-cluster-load-spreadsheet)
 
@@ -15,18 +16,16 @@ Astra Perseverance is a tool to analyze a cassandra cluster to gain an initial i
 This script extracts and organizes key information from diagnostic files from the cluster related to migrating a cassandra cluster to Astra. The following information is organized in a spreadsheet with multiple tabs:
 
 Workload 
- * R/W TPS (Cluster/Table)
- * R/W TPMO (Cluster)
- * Percentage of R/W of total R,W and RW load (Table)
- * Percentage of R/W of total RW load (Cluster)
+ * Average R/W Requests Transactions per sec (TPS) (Cluster/Table)
+ * Average R/W Requests Transactions per Month (TPMO) (Cluster)
+ * Percentage of R/W Requests of total R,W and RW load (Table)
+ * Percentage of R/W Requests of total RW load (Cluster)
  * RF (Keyspace/Table) 
 
 Data Size
  * Data Size (Cluster/Table)
  * RF (Keyspace/Table)
  * Data Set Size (Cluster/Table)
- * Estimated Average Row Size (Table)
- * Estimated Row Rount (Table)
 
 GC Pauses
  * Count (Cluster/DC/Node)
@@ -39,16 +38,14 @@ Node Data
 Node R/W Latency Proxihistogram
  * P99/P98/P95/P75/P50
 
-Dropped Mutations
- * Count (Node/DC/Keyspace/Table)
-
-Table Count per DC;
-Wide Partitions (over 100 MB);
-SSTable Count (over 15);
-Read Latency (over 5ms);
-Write Latency (over 1ms);
-Tombstones (Future version)
-
+A list of the following above a threshhold value
+ * Dropped Mutations (Node/Keyspace/Table)
+ * Table Count per DC;
+ * Large Partitions;
+ * SSTable Count;
+ * Read Latency (over 5ms);
+ * Write Latency (over 1ms);
+ * Tombstones (Future version)
 
 
 <!-- ORIGINS OF THE CODE -->
@@ -56,6 +53,28 @@ Tombstones (Future version)
 This code was created to assist in identifying write and read calls per month for use of estimating Astra usage costs.  For so long, the max tps ruled everything.  Environments were built on the daily, weekly or monthly max loads.  Now that there is a Cassandra DBaaS - DataStax Astra (https://astra.datastax.com) with prices based on averages, the nessesity to get average transaction numbers is important. Enjoy!! 
 
 The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Perseverance.  It's purpose is to gather and communicate information about Mars.   
+
+<!-- ITEMS ANALYZED -->
+## Items Analyzed
+The following items are analzed for potential issues with migration to Astra:
+
+Astra Guardrails
+
+- Number of materialized views per table
+ - Number of indexes per table
+ - Number of custom indexes per table
+ - Number of tables in a keyspace
+ - Number of fields in a table
+ - Partition size (MB)
+ - Use of UDA and UDF
+
+Cluster Health
+
+- Node read latency (ms)
+ - Node write latency (ms)
+ - Node P99 GC pause time
+ - Number of dropped mutations per node/table
+
 
 <!-- GETTING STARTED -->
 ## Getting Started
