@@ -60,7 +60,7 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 
 <!-- ITEMS ANALYZED -->
 ## Items Analyzed
-The following items are checked with Astra Perseverance:
+The following items are analzed for potential issues with migration to Astra:
 
 Astra Guardrails
 
