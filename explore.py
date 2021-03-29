@@ -11,15 +11,37 @@ gr_ind = 1        # Number of indexes per table
 gr_cind = 1       # Number of custom indexes per table
 gr_tblcnt = 100   # Number of tables in a keyspace
 gr_fldcnt = 50    # Number of fields in a table
-gr_lpar = 50      # Partition size (MB)
+gr_lpar = 100      # Partition size (MB)
 
 
 # Cluster Heaalth threshhold defaults
-th_rl = 50        # Node read latency (ms)
-th_wl = 10        # Node write latency (ms)
-th_sstbl = 15     # SStable count per node/table
+th_rl = 100        # Node read latency (ms)
+th_wl = 100        # Node write latency (ms)
+th_sstbl = 20     # SStable count per node/table
 th_gcp = 800      # Node P99 GC pause time
 th_drm = 100000   # Number of dropped mutations per node/table
+
+script_notice = 'Astra Perseverance\n'\
+                'Version '+version+'\n'\
+                'This script is intended to be used as a guide.  Not all guardrails\n'\
+                'are included in this sheet. Please view current Astra guardrials at\n'\
+                'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n'\
+                'The following items are checked with Astra Perseverance:\n'\
+                'Guardrails\n'\
+                ' - Number of materialized views per table : >'+str(gr_mv)+'\n'\
+                ' - Number of indexes per table : >'+str(gr_ind)+'\n'\
+                ' - Number of custom indexes per table : >'+str(gr_cind)+'\n'\
+                ' - Number of tables in a keyspace : >'+str(gr_tblcnt)+'\n'\
+                ' - Number of fields in a table : >'+str(gr_fldcnt)+'\n'\
+                ' - Partition size (MB) : >'+str(gr_lpar)+'\n'\
+                ' - Use of UDA and UDF\n'\
+               'Cluster Health\n'\
+                ' - Node read latency (ms) : >'+str(th_rl)+'\n'\
+                ' - Node write latency (ms) : >'+str(th_wl)+'\n'\
+                ' - Node P99 GC pause time : >'+str(th_gcp)+'\n'\
+                ' - Number of dropped mutations per node/table : >'+str(th_drm)+'\n\n'\
+                'Supported data in separate spreadsheet tabs'
+ 
 
 # tool imports
 import os.path
@@ -476,6 +498,27 @@ for cluster_url in data_url:
               tbl = tbl_line.split('.')[1].strip().strip('"')
               tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
               tbl_data[ks][tbl]['field'] = {}
+            elif('CREATE AGGREGATE' in line):
+              prev_tbl = tbl
+              if 'IF NOT EXISTS' in line:
+                tbl = line.split()[2].strip('"')
+              else:
+                tbl = line.split()[5].strip('"')
+              tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
+              tbl_data[ks][tbl]['field'] = {}
+              try:
+                warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
+              except:
+                warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
+            elif('CREATE OR REPLACE FUNCTION' in line):
+              prev_tbl = tbl
+              tbl = line.split()[4].strip('"')
+              tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
+              tbl_data[ks][tbl]['field'] = {}
+              try:
+                warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
+              except:
+                warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
             elif('CREATE TABLE' in line):
               prev_tbl = tbl
               tbl_line = line.split()[2].strip('"')
@@ -743,7 +786,7 @@ for cluster_url in data_url:
             if tbl_prt=='field':
               if len(prt_array)>gr_fldcnt:
                 try:
-                  warnings[gr]['Field Qty'].append = 'More than '+str(gr_fldcnt)+' fields in '+ks+'.'+tbl+'.'
+                  warnings[gr]['Field Qty'].append = 'More than '+str(gr_fldcnt)+' fields in '+ks+'.'+tbl
                 except:
                   warnings[gr]['Field Qty'] = [str(len(prt_array))+' fields in '+ks+'.'+tbl]
         except:
@@ -1370,6 +1413,19 @@ for cluster_url in data_url:
     worksheet_chart.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
     row+=2
 
+
+
+  options = {
+      'width': 600,
+      'height': 350,
+      'x_offset': 10,
+      'y_offset': 10,
+
+      'font': {'color': '#3A3A42',
+               'size': 12}
+  }
+
+  worksheet_chart.insert_textbox('D2', script_notice, options)
 
   worksheet_chart.activate()
   workbook.close()
