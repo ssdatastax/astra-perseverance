@@ -6,9 +6,13 @@
 version = "1.0.0"
 
 # Astra guardrail defaults
-gr_mv = 2         # Number of Materialized Views per table
-gr_ind = 1        # Number of Indexes per table
-gr_cind = 1       # Number of Custom Indexes per table
+gr_mv = 2         # Number of materialized views per table
+gr_ind = 1        # Number of indexes per table
+gr_cind = 1       # Number of custom indexes per table
+gr_tblcnt = 100   # Number of tables in a keyspace
+gr_fldcnt = 50    # Number of fields in a table
+gr_lpar = 50      # Partition size in MB
+
 
 # Cluster Heaalth threshhold defaults
 th_rl = 5         # Node read latency
@@ -16,8 +20,6 @@ th_wl = 1         # Node write latency
 th_sstbl = 15     # SStable count per node/table
 th_gcp = 800      # Node P99 GC pause time
 th_drm = 100000   # Number of dropped mutations per node/table
-th_tblcnt = 100   # Number of tables in a keyspace
-th_wpar = 100     # Partition size in MB
 
 # tool imports
 import os.path
@@ -181,12 +183,15 @@ for argnum,arg in enumerate(sys.argv):
     help_content = \
       'usage: look.py [-h] [--help] [-inc_yaml]\n'\
       '                       [-p PATH_TO_DIAG_FOLDER]\n'\
+      '                       [-gr_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
+      '                       [-gr_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
+      '                       [-gr_ind INDEX_GUARDRAIL]\n'\
+      '                       [-gr_cind CUSTOM_INDEX_GUARDRAIL]\n'\
+      '                       [-gr_lpar LARGE_PARTITON_SIZE_GUARDRAIL]\n'\
       '                       [-th_rl READ_LATENCY_THRESHOLD]\n'\
       '                       [-th_wl WRITE_LATENCY_THRESHOLD]\n'\
       '                       [-th_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
       '                       [-th_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
-      '                       [-th_tblcnt CLUSTER_TABLE_COUNT_THRESHOLD]\n'\
-      '                       [-th_wpar WIDE_PARTITON_SIZE_THRESHOLD]\n'\
       'required arguments:\n'\
       '-p                     Path to the diagnostics folder\n'\
       '                        Multiple diag folders accepted\n'\
@@ -194,6 +199,26 @@ for argnum,arg in enumerate(sys.argv):
       'optional arguments:\n'\
       '-v, --version          Version\n'\
       '-h, --help             This help info\n'\
+      '-gr_tblcnt             Threshold: Cluster Table Count\n'\
+      '                        Quantity of tables in the cluster\n'\
+      '                        to be listed in the Table Qty tab\n'\
+      '                        Default Value: '+str(gr_tblcnt)+'\n'\
+      '-gr_fldcnt             Threshold: Table Field Count\n'\
+      '                        Quantity of fields in a table\n'\
+      '                        Default Value: '+str(gr_fldcnt)+'\n'\
+      '-gr_mv                 Guardrails: Materialized Views\n'\
+      '                        Number of MV per table\n'\
+      '                        Default Value: '+str(gr_mv)+'\n'\
+      '-gr_ind                Guardrails: Indexes\n'\
+      '                        Number of Indexes per table\n'\
+      '                        Default Value: '+str(gr_ind)+'\n'\
+      '-gr_cind               Guardrails: Custom Indexs\n'\
+      '                        Number of Custom Indexes per table\n'\
+      '                        Default Value: '+str(gr_cind)+'\n'\
+      '-gr_lpar               Threshold: Large Partitions\n'\
+      '                        Size of partition (MB)\n'\
+      '                        to be listed in the Large Partition tab\n'\
+      '                        Default Value: '+str(gr_lpar)+'\n'\
       '-th_rl                 Threshold: Read Latency\n'\
       '                        Local read time(ms) in the cfstats log \n'\
       '                        to be listed in the Read Latency tab\n'\
@@ -209,24 +234,7 @@ for argnum,arg in enumerate(sys.argv):
       '-th_drm                Threshold: Dropped Mutations\n'\
       '                        Dropped Mutation count in the cfstats log \n'\
       '                        to be listed in the Dropped Mutation tab\n'\
-      '                        Default Value: '+str(th_drm)+'\n'\
-      '-th_tblcnt             Threshold: Cluster Table Count\n'\
-      '                        Quantity of tables in the cluster\n'\
-      '                        to be listed in the Table Qty tab\n'\
-      '                        Default Value: '+str(th_tblcnt)+'\n'\
-      '-th_wpar               Threshold: Wide Partitions\n'\
-      '                        Size of partition (MB)\n'\
-      '                        to be listed in the Wide Partition tab\n'\
-      '                        Default Value: '+str(th_wpar)+'\n'\
-      '-gr_mv                 Guardrails: Materialized Views\n'\
-      '                        Number of MV per table\n'\
-      '                        Default Value: '+str(gr_mv)+'\n'\
-      '-gr_ind                Guardrails: Indexes\n'\
-      '                        Number of Indexes per table\n'\
-      '                        Default Value: '+str(gr_ind)+'\n'\
-      '-gr_cind               Guardrails: Custom Indexs\n'\
-      '                        Number of Custom Indexes per table\n'\
-      '                        Default Value: '+str(gr_cind)+'\n'
+      '                        Default Value: '+str(th_drm)+'\n'
     exit(help_content)
   elif(arg=='-v' or arg =='--version'):
     exit("Version " + version)
@@ -243,12 +251,14 @@ for argnum,arg in enumerate(sys.argv):
     th_sstbl = float(sys.argv[argnum+1])
   elif(arg=='-th_drm'):
     th_drm = float(sys.argv[argnum+1])
-  elif(arg=='-th_tblcnt'):
-    th_tblcnt = float(sys.argv[argnum+1])
-  elif(arg=='-th_wpar'):
-    th_wpar = float(sys.argv[argnum+1])
+  elif(arg=='-gr_gpar'):
+    gr_lpar = float(sys.argv[argnum+1])
   elif(arg=='-th_gcp'):
     th_gcp = float(sys.argv[argnum+1])
+  elif(arg=='-gr_tblcnt'):
+    gr_tblcnt = float(sys.argv[argnum+1])
+  elif(arg=='-gr_fldcnt'):
+    gr_fldcnt = float(sys.argv[argnum+1])
   elif(arg=='-gr_mv'):
     gr_mv = float(sys.argv[argnum+1])
   elif(arg=='-gr_ind'):
@@ -267,8 +277,8 @@ sheets_data = []
 sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(th_drm)+' dropped mutations (cfstats)'})
-sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':th_tblcnt,'strip':'','extra':0,'comment':''})
-sheets_data.append({'sheet_name':'partition','tab_name':'Wide Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':th_wpar*1000000,'strip':'','extra':1,'comment':'Table with partiton sizes greater than '+str(th_wpar)+' (cfstats)'})
+sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':gr_tblcnt,'strip':'','extra':0,'comment':''})
+sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':gr_lpar*1000000,'strip':'','extra':1,'comment':'Table with partiton sizes greater than '+str(gr_lpar)+' (cfstats)'})
 sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':th_sstbl,'strip':'','extra':1,'comment':''})
 sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_rl,'strip':'ms','extra':0,'comment':''})
 sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_wl,'strip':'ms','extra':0,'comment':''})
@@ -340,8 +350,9 @@ for cluster_url in data_url:
   total_reads = 0
   total_writes = 0
   read_count = []
-  write_count =[]
-  table_count =[]
+  write_count = []
+  table_count = []
+  field_count = {}
   table_tps={}
   table_row_size = {}
   total_rw = 0
@@ -497,7 +508,8 @@ for cluster_url in data_url:
                   if('AND ' not in line and ' WITH ' not in line):
                     fld_name = line.split()[0]
                     fld_type = line.split()[1].strip(',')
-                    tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                    if (fld_name<>'CREATE'):
+                      tbl_data[ks][tbl]['field'][fld_name]=fld_type
                 except:
                   print('Error1:' + ks + '.' + tbl + ' - ' + line)
 
@@ -616,6 +628,7 @@ for cluster_url in data_url:
                   except:
                     write_table[ks][tbl] = count
 
+
   # total up R/W across all nodes
   for ks,readtable in read_table.items():
     for tablename,tablecount in readtable.items():
@@ -716,13 +729,26 @@ for cluster_url in data_url:
     try: type(warnings[gr][gr_name])
     except: warnings[gr][gr_name] = []
     for ks,tbl_array in ks_array.items():
-      if (ks<>'limit'):
+      if (ks<>'limit' and ks not in system_keyspace):
         for tbl,gr_array in tbl_array.items():
           if len(gr_array)>lmt:
-            warnings[gr][gr_name].append('More than '+str(int(lmt))+' '+gr_name+' of '+ks+'.'+tbl)
-#            print(('More than '+str(int(lmt))+' '+gr_name+' of '+ks+'.'+tbl)
+            warnings[gr][gr_name].append(str(len(gr_array))+' '+gr_name+' of '+ks+'.'+tbl)
 
-  # Potential Performance Issues
+  # review field count
+  for ks,ks_array in tbl_data.items():
+    if (ks not in system_keyspace):
+      for tbl,tbl_array in ks_array.items():
+        try:
+          for tbl_prt,prt_array in tbl_array.items():
+            if tbl_prt=='field':
+              if len(prt_array)>gr_fldcnt:
+                try:
+                  warnings[gr]['Field Qty'].append = 'More than '+str(gr_fldcnt)+' fields in '+ks+'.'+tbl+'.'
+                except:
+                  warnings[gr]['Field Qty'] = [str(len(prt_array))+' fields in '+ks+'.'+tbl]
+        except:
+          x=1
+
 
 
 
@@ -1066,9 +1092,12 @@ for cluster_url in data_url:
                     try:
                       type(warnings['Cluster Health'][sheet_array['tab_name']])
                     except:
-                      warnings['Cluster Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
+                      if sheet_array['sheet_name']=='numTables' or sheet_array['sheet_name']=='partition':
+                        warnings['Astra Guardrails'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
+                      else:
+                        warnings['Cluster Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
                     if(sheet_array['sheet_name']=='partition'):
-                      row_data[4] = str(int(value)/1000000)
+                        row_data[4] = str(int(value)/1000000)
                     if(sheet_array['extra']):
                       sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
                       row[sheet_array['sheet_name']]+=1
