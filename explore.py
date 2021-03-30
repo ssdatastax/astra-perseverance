@@ -534,7 +534,7 @@ for cluster_url in data_url:
               tbl = tbl_line.split('.')[1].strip().strip('"')
               tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
               tbl_data[ks][tbl]['field'] = {}
-            if (tbl <>''):
+            if (tbl !=''):
               if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
                 src_ks = line.split('.')[0].split()[1].strip('"')
                 src_tbl = line.split('.')[1].strip('"')
@@ -554,10 +554,10 @@ for cluster_url in data_url:
                   if('AND ' not in line and ' WITH ' not in line):
                     fld_name = line.split()[0]
                     fld_type = line.split()[1].strip(',')
-                    if (fld_name<>'CREATE'):
+                    if (fld_name!='CREATE'):
                       tbl_data[ks][tbl]['field'][fld_name]=fld_type
                 except:
-                  print('Error1:' + ks + '.' + tbl + ' - ' + line)
+                  print(('Error1:' + ks + '.' + tbl + ' - ' + line))
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
@@ -597,7 +597,7 @@ for cluster_url in data_url:
         else:
           if('Keyspace' in line):
             ks = line.split(':')[1].strip()
-          if (ks<>''):
+          if (ks!=''):
             try:
               type(table_tps[ks])
             except:
@@ -608,7 +608,7 @@ for cluster_url in data_url:
             elif('Table (index): ' in line):
               tbl = line.split(':')[1].strip()
               is_index = 1
-            if(tbl<>''):
+            if(tbl!=''):
               try:
                 type(table_tps[ks][tbl])
               except:
@@ -676,19 +676,19 @@ for cluster_url in data_url:
 
 
   # total up R/W across all nodes
-  for ks,readtable in read_table.items():
-    for tablename,tablecount in readtable.items():
+  for ks,readtable in list(read_table.items()):
+    for tablename,tablecount in list(readtable.items()):
       read_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
-  for ks,writetable in write_table.items():
-    for tablename,tablecount in writetable.items():
+  for ks,writetable in list(write_table.items()):
+    for tablename,tablecount in list(writetable.items()):
       try:
         write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
       except:
         write_count.append({'keyspace':ks,'table':tablename,'count':tablecount})
 
   # total up data size across all nodes
-  for ks,sizetable in size_table.items():
-    for tablename,tablesize in sizetable.items():
+  for ks,sizetable in list(size_table.items()):
+    for tablename,tablesize in list(sizetable.items()):
       table_count.append({'keyspace':ks,'table':tablename,'count':tablesize})
 
   # sort R/W data
@@ -756,13 +756,13 @@ for cluster_url in data_url:
   #collect cluster GC Percents
   get_gc_data('Cluster',cluster_name,cluster_gcpause,0)
 
-  for dc, dc_pause in dc_gcpause.items():
+  for dc, dc_pause in list(dc_gcpause.items()):
     get_gc_data('DC',dc,dc_pause,0)
-  for node, node_pause in node_gcpause.items():
+  for node, node_pause in list(node_gcpause.items()):
     get_gc_data('Node',node,node_pause,1)
 
   # Create DC List
-  for node_val, dc_val in node_dc.items():
+  for node_val, dc_val in list(node_dc.items()):
     dc_list.append(dc_val)
   dc_list = list(dict.fromkeys(dc_list))
   dc_list.sort()
@@ -770,22 +770,22 @@ for cluster_url in data_url:
 
   # Astra Guardrails
   gr = 'Astra Guardrails'
-  for gr_name, ks_array in gr_tbl_data.items():
+  for gr_name, ks_array in list(gr_tbl_data.items()):
     lmt = gr_tbl_data[gr_name]['limit']
     try: type(warnings[gr][gr_name])
     except: warnings[gr][gr_name] = []
-    for ks,tbl_array in ks_array.items():
-      if (ks<>'limit' and ks not in system_keyspace):
-        for tbl,gr_array in tbl_array.items():
+    for ks,tbl_array in list(ks_array.items()):
+      if (ks!='limit' and ks not in system_keyspace):
+        for tbl,gr_array in list(tbl_array.items()):
           if len(gr_array)>lmt:
             warnings[gr][gr_name].append(str(len(gr_array))+' '+gr_name+' of '+ks+'.'+tbl)
 
   # review field count
-  for ks,ks_array in tbl_data.items():
+  for ks,ks_array in list(tbl_data.items()):
     if (ks not in system_keyspace):
-      for tbl,tbl_array in ks_array.items():
+      for tbl,tbl_array in list(ks_array.items()):
         try:
-          for tbl_prt,prt_array in tbl_array.items():
+          for tbl_prt,prt_array in list(tbl_array.items()):
             if tbl_prt=='field':
               if len(prt_array)>gr_fldcnt:
                 try:
@@ -1070,7 +1070,7 @@ for cluster_url in data_url:
             col_widths[sheet_array['sheet_name']] = sheet_array['widths']
             sheets_record[sheet_array['sheet_name']]={}
 
-        for sheet_name,sheet_obj in stats_sheets.items():
+        for sheet_name,sheet_obj in list(stats_sheets.items()):
           if (sheet_name == 'ph'):
             sheet_obj.merge_range('A1:F1','Coordinating Node Read Latency',title_format3)
             sheet_obj.merge_range('H1:M1','Coordinating Node Write Latency',title_format3)
@@ -1078,7 +1078,7 @@ for cluster_url in data_url:
           else:
             row[sheet_name]=0
           for col_num,header in enumerate(headers[sheet_name]):
-            if header <> '':
+            if header != '':
               sheet_obj.write(row[sheet_name],col_num,header,title_format)
           for col_num,col_width in enumerate(col_widths[sheet_name]):
             sheet_obj.set_column(col_num,col_num,col_width)
@@ -1159,7 +1159,7 @@ for cluster_url in data_url:
         if (sheet_array['sheet_name'] not in exclude_tab):
           if(sheet_array['extra']):
             row[sheet_array['sheet_name']]=1
-            for record_num,record in sheets_record[sheet_array['sheet_name']].items():
+            for record_num,record in list(sheets_record[sheet_array['sheet_name']].items()):
               new_key = sheet_array['sheet_name']+'_'+record[2]+'_'+record[3]
               if hasattr(key_record,new_key) :
                 if(key_record[new_key] < record[4]):
@@ -1189,7 +1189,7 @@ for cluster_url in data_url:
       for row_key in key_record:
         write_row(row_key.split('_')[0],key_data[row_key],data_format)
       
-      for nodeid,ph_datarow in proxyhistData.items():
+      for nodeid,ph_datarow in list(proxyhistData.items()):
         if nodeid not in prev_nodes:
           row_data = [nodeid,round(ph_datarow['99%'][0][0],2),round(ph_datarow['98%'][0][0],2),round(ph_datarow['95%'][0][0],2),round(ph_datarow['75%'][0][0],2),round(ph_datarow['50%'][0][0],2),'',nodeid,round(ph_datarow['99%'][0][1],2),round(ph_datarow['98%'][0][1],2),round(ph_datarow['95%'][0][1],2),round(ph_datarow['75%'][0][1],2),round(ph_datarow['50%'][0][1],2)]
           write_row('ph',row_data,data_format,[6])
@@ -1212,7 +1212,7 @@ for cluster_url in data_url:
     gc_worksheet.set_column(col_num,col_num,col_width)
 
   column=0
-  for name, gc_val in gc_data.items():
+  for name, gc_val in list(gc_data.items()):
     if(gc_val['Level']=='Cluster'):
       row+=1
       for field in gc_fields:
@@ -1229,7 +1229,7 @@ for cluster_url in data_url:
       column=0
 
   dc_count=0
-  for name, gc_val in gc_data.items():
+  for name, gc_val in list(gc_data.items()):
     if(gc_val['Level']=='DC'):
       dc_count += 1
       for field in gc_fields:
@@ -1247,7 +1247,7 @@ for cluster_url in data_url:
       column=0
 
   for dc_name in dc_list:
-    for name, gc_val in gc_data.items():
+    for name, gc_val in list(gc_data.items()):
       node_ip = gc_val['Name']
       if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
         for field in gc_fields:
@@ -1400,11 +1400,11 @@ for cluster_url in data_url:
 
   row+=7
   start_row=row
-  for warn_cat_title,warn_cat_array in warnings.items():
+  for warn_cat_title,warn_cat_array in list(warnings.items()):
     row+=1
     worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_cat_title,header_format5)
     row+=1
-    for warn_title,warn_array in warn_cat_array.items():
+    for warn_title,warn_array in list(warn_cat_array.items()):
       if (len(warn_array)):
         worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_title,title_format4)
         write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row),warn_title)
@@ -1420,6 +1420,6 @@ for cluster_url in data_url:
 
   worksheet_chart.activate()
   workbook.close()
-  print('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'
+  print((('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'))
 exit();
 
