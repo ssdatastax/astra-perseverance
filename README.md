@@ -11,7 +11,7 @@
 
 <!-- SUMMARY -->
 ## Summary
-Astra Perseverance is a tool to analyze a cassandra cluster to gain an initial insight on moving the cluster to DataStax Astra, the Cassandra DBAAS.
+Astra Perseverance is a tool to analyze a cassandra cluster to gain an initial insight on migrating cassandra clusters to DataStax Astra, the Cassandra DBAAS.
 
 This script extracts and organizes key information from diagnostic files from the cluster related to migrating a cassandra cluster to Astra. The following information is organized in a spreadsheet with multiple tabs:
 
