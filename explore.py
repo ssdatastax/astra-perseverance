@@ -425,12 +425,14 @@ for cluster_url in data_url:
   ks = ''
   dc_ks_rf = {}
   prev_node = ''
+  is_nodes=0
   
   for node in os.listdir(rootPath):
     if (prev_node==''):
       if (ks==''):
         ckpath = rootPath + node + '/nodetool'
         if path.isdir(ckpath):
+          is_nodes=1
           prev_node=node
           ks = ''
           tbl = ''
@@ -558,13 +560,14 @@ for cluster_url in data_url:
                       tbl_data[ks][tbl]['field'][fld_name]=fld_type
                 except:
                   print(('Error1:' + ks + '.' + tbl + ' - ' + line))
+  if (is_nodes==0):
+    exit('No Node Info')
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
   for node in os.listdir(rootPath):
     ckpath = rootPath + node + '/nodetool'
     if path.isdir(ckpath):
-      
       # initialize node variables
       iodata = {}
       iodata[node] = {}
