@@ -5,46 +5,63 @@
 # Astra Perseverance Version
 version = "1.0.0"
 
-# Astra guardrail defaults
+# Astra guardrail test parameter defaults
+tp_mv = 2         # Number of materialized views per table
+tp_si = 1        # Number of indexes per table
+tp_sai = 8       # Number of storage-attached indexes per table
+tp_tblcnt = 175   # Number of tables in a keyspace
+tp_colcnt = 45    # Number of columns in a table
+tp_lpar = 100     # Partition size (MB)
+
+# Database Heaalth test parameter defaults
+tp_rl = 100       # Node read latency (ms)
+tp_wl = 100       # Node write latency (ms)
+tp_sstbl = 20     # SStable count per node/table
+tp_gcp = 800      # Node P99 GC pause time
+tp_drm = 100000   # Number of dropped mutations per table
+
+#Astra Guardrails
 gr_mv = 2         # Number of materialized views per table
-gr_ind = 1        # Number of indexes per table
-gr_cind = 1       # Number of custom indexes per table
-gr_tblcnt = 100   # Number of tables in a keyspace
-gr_fldcnt = 50    # Number of fields in a table
-gr_lpar = 100     # Partition size (MB)
+gr_si = 1        # Number of indexes per table
+gr_sai = 10       # Number of storage-attached indexes per table
+gr_tblcnt = 200   # Number of tables in a keyspace
+gr_colcnt = 50    # Number of columns in a table
+gr_lpar = 200     # Partition size (MB)
 
 
-# Cluster Heaalth threshhold defaults
-th_rl = 100       # Node read latency (ms)
-th_wl = 100       # Node write latency (ms)
-th_sstbl = 20     # SStable count per node/table
-th_gcp = 800      # Node P99 GC pause time
-th_drm = 100000   # Number of dropped mutations per node/table
-
-info_box = 'Astra Perseverance\n'\
+info_box = 'DataStax Perseverance\n'\
                 'Version '+version+'\n'\
                 'This script is intended to be used as a guide.  Not all guardrails\n'\
                 'are included in this sheet. Please view current Astra guardrials at\n'\
                 'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n\n'\
-                'The following items are analyzed with Astra Perseverance:\n'\
-                'Astra Guardrails\n'\
-                ' - Number of materialized views per table : >'+str(gr_mv)+'\n'\
-                ' - Number of indexes per table : >'+str(gr_ind)+'\n'\
-                ' - Number of custom indexes per table : >'+str(gr_cind)+'\n'\
-                ' - Number of tables in a keyspace : >'+str(gr_tblcnt)+'\n'\
-                ' - Number of fields in a table : >'+str(gr_fldcnt)+'\n'\
-                ' - Partition size (MB) : >'+str(gr_lpar)+'\n'\
+                'Astra Guardrail Limits\n'\
+                ' - '+str(gr_mv)+' materialized views per table\n'\
+                ' - '+str(gr_si)+' secondary index per table\n'\
+                ' - '+str(gr_sai)+' storage-attached indexes per table\n'\
+                ' - '+str(gr_tblcnt)+' tables in the database\n'\
+                ' - '+str(gr_colcnt)+' columns in a table\n'\
+                ' - '+str(gr_lpar)+'MB Partition\n'\
                 ' - Use of UDA and UDF\n'\
-               'Cluster Health\n'\
-                ' - Node read latency (ms) : >'+str(th_rl)+'\n'\
-                ' - Node write latency (ms) : >'+str(th_wl)+'\n'\
-                ' - Node P99 GC pause time : >'+str(th_gcp)+'\n'\
-                ' - Number of SSTables per node/table : >'+str(th_sstbl)+'\n'\
-                ' - Number of dropped mutations per node/table : >'+str(th_drm)+'\n\n'\
-                'Supported data in separate spreadsheet tabs'
-
+                'The following items are analyzed with Astra Perseverance:\n'\
+                'Astra Guardrail Test Parameters\n'\
+                ' - More than '+str(tp_mv)+' materialized views per table\n'\
+                ' - More than '+str(tp_si)+' secondary index per table\n'\
+                ' - More than '+str(tp_sai)+' storage-attached indexes per table\n'\
+                ' - More than '+str(tp_tblcnt)+' tables in the database\n'\
+                ' - More than '+str(tp_colcnt)+' columns in a table\n'\
+                ' - Partition size greater than '+str(tp_lpar)+'MB\n'\
+                ' - Use of UDA and UDF\n'\
+               'Database Health Test Parameters\n'\
+                ' - Local table read latency more than '+str(tp_rl)+'ms\n'\
+                ' - Local table write latency more than '+str(tp_wl)+'ms\n'\
+                ' - Node P99 GC pause time greater than '+str(tp_gcp)+'ms\n'\
+                ' - More than '+str(tp_sstbl)+' SSTables per table\n'\
+                ' - More than '+str(tp_drm)+' dropped mutations per table\n\n'\
+                '*** VALUES THAT HAVE GONE BEYOND THE GUARDRAILS\n'\
+                'Supported data in separate spreadsheet tabs'\
+ 
 #
-info_box_options = {'width': 500,'height': 400,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
+info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
 
 # tool imports
 import os.path
@@ -63,18 +80,18 @@ def write_cmt(wksht,coord,title,vis=0):
       wksht.write_comment(coord,cmt_array['comment'][0],{'visible':vis,'font_size': 12,'x_scale': 2,'y_scale': 2})
 
 # check for guardrail
-def add_gr_tbl(gr,ks,tbl,src_ks,src_tbl):
+def add_tp_tbl(gr,ks,tbl,src_ks,src_tbl):
   if src_ks not in system_keyspace:
     try:
-      type(gr_tbl_data[gr][src_ks])
+      type(tp_tbl_data[gr][src_ks])
     except:
-      gr_tbl_data[gr][src_ks]={}
+      tp_tbl_data[gr][src_ks]={}
     try:
-      type(gr_tbl_data[gr][src_ks][src_tbl])
+      type(tp_tbl_data[gr][src_ks][src_tbl])
     except:
-      gr_tbl_data[gr][src_ks][src_tbl] = []
-    if (ks+'.'+tbl) not in gr_tbl_data[gr][src_ks][src_tbl]:
-      gr_tbl_data[gr][src_ks][src_tbl].append(ks+'.'+tbl)
+      tp_tbl_data[gr][src_ks][src_tbl] = []
+    if (ks+'.'+tbl) not in tp_tbl_data[gr][src_ks][src_tbl]:
+      tp_tbl_data[gr][src_ks][src_tbl].append(ks+'.'+tbl)
 
 
 
@@ -117,11 +134,11 @@ def parseGC(node,systemlog,systemlogpath):
       ldatetime = dt + ' ' + re.sub(',.*$','',tm.strip())
       log_dt = datetime.datetime.strptime(ldatetime,log_df)
       log_jd = pd.Timestamp(year=log_dt.year,month=log_dt.month,day=log_dt.day,hour=log_dt.hour,minute=log_dt.minute,tz=tz[node]).to_julian_date()
-      cluster_gcpause.append(int(gcpause))
+      database_gcpause.append(int(gcpause))
       dc_gcpause[dc].append(int(gcpause))
       node_gcpause[node].append(int(gcpause))
-      if(newest_gc[cluster_name]['jd']<log_jd): newest_gc[cluster_name]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
-      if(oldest_gc[cluster_name]['jd']>log_jd): oldest_gc[cluster_name]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
+      if(newest_gc[database_name]['jd']<log_jd): newest_gc[database_name]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
+      if(oldest_gc[database_name]['jd']>log_jd): oldest_gc[database_name]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(newest_gc[dc]['jd']<log_jd): newest_gc[dc]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(oldest_gc[dc]['jd']>log_jd): oldest_gc[dc]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(newest_gc[node]['jd']<log_jd): newest_gc[node]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
@@ -152,8 +169,8 @@ def get_gc_data(level,name,gcpause,is_node):
       gc_data[name].update({'P98':str(gcpause[p98_pos])})
       gc_data[name].update({'P99':str(gcpause[p99_pos])})
       gc_data[name].update({'Max':str(gcpause[max_pos])})
-      if (level=='Cluster' and gcpause[p99_pos] > th_gcp):
-        warnings['Cluster Health']['GC Pauses']=['P99 GC pause greater than '+str(int(th_gcp))]
+      if (level=='Database' and gcpause[p99_pos] > tp_gcp):
+        warnings['Database Health']['GC Pauses']=['P99 GC pause greater than '+str(int(tp_gcp))]
     else:
       gc_data[name].update({'Min':'N/A'})
       gc_data[name].update({'P50':'N/A'})
@@ -207,16 +224,16 @@ for argnum,arg in enumerate(sys.argv):
   if(arg=='-h' or arg =='--help'):
     help_content = \
       'usage: look.py [-h] [--help] [-inc_yaml]\n'\
-      '                       [-p PATH_TO_DIAG_FOLDER]\n'\
-      '                       [-gr_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
-      '                       [-gr_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
-      '                       [-gr_ind INDEX_GUARDRAIL]\n'\
-      '                       [-gr_cind CUSTOM_INDEX_GUARDRAIL]\n'\
-      '                       [-gr_lpar LARGE_PARTITON_SIZE_GUARDRAIL]\n'\
-      '                       [-th_rl READ_LATENCY_THRESHOLD]\n'\
-      '                       [-th_wl WRITE_LATENCY_THRESHOLD]\n'\
-      '                       [-th_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
-      '                       [-th_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
+      '                       [-p PAtp_TO_DIAG_FOLDER]\n'\
+      '                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
+      '                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
+      '                       [-tp_si SECONDARY INDEX_GUARDRAIL]\n'\
+      '                       [-tp_sai STORAGE_ATTACHED_INDEX_GUARDRAIL]\n'\
+      '                       [-tp_lpar LARGE_PARTITON_SIZE_GUARDRAIL]\n'\
+      '                       [-tp_rl READ_LATENCY_THRESHOLD]\n'\
+      '                       [-tp_wl WRITE_LATENCY_THRESHOLD]\n'\
+      '                       [-tp_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
+      '                       [-tp_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
       'required arguments:\n'\
       '-p                     Path to the diagnostics folder\n'\
       '                        Multiple diag folders accepted\n'\
@@ -224,42 +241,53 @@ for argnum,arg in enumerate(sys.argv):
       'optional arguments:\n'\
       '-v, --version          Version\n'\
       '-h, --help             This help info\n'\
-      '-gr_tblcnt             Threshold: Cluster Table Count\n'\
-      '                        Quantity of tables in the cluster\n'\
-      '                        to be listed in the Table Qty tab\n'\
-      '                        Default Value: '+str(gr_tblcnt)+'\n'\
-      '-gr_fldcnt             Threshold: Table Field Count\n'\
-      '                        Quantity of fields in a table\n'\
-      '                        Default Value: '+str(gr_fldcnt)+'\n'\
-      '-gr_mv                 Guardrails: Materialized Views\n'\
-      '                        Number of MV per table\n'\
-      '                        Default Value: '+str(gr_mv)+'\n'\
-      '-gr_ind                Guardrails: Indexes\n'\
-      '                        Number of Indexes per table\n'\
-      '                        Default Value: '+str(gr_ind)+'\n'\
-      '-gr_cind               Guardrails: Custom Indexs\n'\
-      '                        Number of Custom Indexes per table\n'\
-      '                        Default Value: '+str(gr_cind)+'\n'\
-      '-gr_lpar               Threshold: Large Partitions\n'\
-      '                        Size of partition (MB)\n'\
+      '-tp_tblcnt             Database Table Count (Guardrail)\n'\
+      '                        Number of tables in the database\n'\
+      '                        to be listed in the Number of Tables tab\n'\
+      '                        Astra Guardrail Limit: '+str(gr_tblcnt)+'\n'\
+      '                        Test Parameter: >'+str(tp_tblcnt)+'\n'\
+      '-tp_colcnt             Table Column Count (Guardrail)\n'\
+      '                        Number of columns in a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_colcnt)+'\n'\
+      '                        Test Parameter: >'+str(tp_colcnt)+'\n'\
+      '-tp_mv                 Materialized Views  (Guardrail)\n'\
+      '                        Number of Materialized Views of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_mv)+'\n'\
+      '                        Test Parameter: >'+str(tp_mv)+'\n'\
+      '-tp_si                Secondary Indexes  (Guardrail)\n'\
+      '                        Number of Secondary Indexes of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_si)+'\n'\
+      '                        Test Parameter: >'+str(tp_si)+'\n'\
+      '-tp_sai                Storage Attached Indexes  (Guardrail)\n'\
+      '                        Number of SAI of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_sai)+'\n'\
+      '                        Test Parameter: >'+str(tp_sai)+'\n'\
+      '-tp_lpar               Large Partitions (Guardrail)\n'\
+      '                        Size of partition in MB\n'\
       '                        to be listed in the Large Partition tab\n'\
-      '                        Default Value: '+str(gr_lpar)+'\n'\
-      '-th_rl                 Threshold: Read Latency\n'\
+      '                        Astra Guardrail Limit: '+str(gr_lpar)+'MB\n'\
+      '                        Test Parameter: >'+str(tp_lpar)+'\n'\
+      '-tp_rl                 Local Read Latency (Database Health)\n'\
       '                        Local read time(ms) in the cfstats log \n'\
       '                        to be listed in the Read Latency tab\n'\
-      '                        Default Value: '+str(th_rl)+'\n'\
-      '-th_wl                 Threshold: Write Latency\n'\
+      '                        Test Parameter: >'+str(tp_rl)+'\n'\
+      '-tp_wl                 Local Write Latency (Database Health)\n'\
       '                        Local write time(ms) in the cfstats log \n'\
       '                        to be listed in the Read Latency tab\n'\
-      '                        Default Value: '+str(th_wl)+'\n'\
-      '-th_sstbl              Threshold: SSTable Count\n'\
+      '                        Test Parameter: >'+str(tp_wl)+'\n'\
+      '-tp_sstbl              SSTable Count (Database Health)\n'\
       '                        SStable count in the cfstats log \n'\
       '                        to be listed in the Table Qantity tab\n'\
-      '                        Default Value: '+str(th_sstbl)+'\n'\
-      '-th_drm                Threshold: Dropped Mutations\n'\
+      '                        Test Parameter: >'+str(tp_sstbl)+'\n'\
+      '-tp_drm                Dropped Mutations (Database Health)\n'\
       '                        Dropped Mutation count in the cfstats log \n'\
       '                        to be listed in the Dropped Mutation tab\n'\
-      '                        Default Value: '+str(th_drm)+'\n'
+      '                        Test Parameter: >'+str(tp_drm)+'\n\n'\
+      '-tp_gcp                GCPauses (Database Health)\n'\
+      '                        Node P99 GC pause time (ms)\n'\
+      '                        to be listed in the GC Pauses tab\n'\
+      '                        Test Parameter: >'+str(tp_gcp)+'\n\n'\
+      'Notice: Test parameters cannot be larger than guardrails'
     exit(help_content)
   elif(arg=='-v' or arg =='--version'):
     exit("Version " + version)
@@ -268,105 +296,120 @@ for argnum,arg in enumerate(sys.argv):
 for argnum,arg in enumerate(sys.argv):
   if(arg=='-p'):
     data_url.append(sys.argv[argnum+1])
-  elif(arg=='-th_rl'):
-    th_rl = float(sys.argv[argnum+1])
-  elif(arg=='-th_wl'):
-    th_wl = float(sys.argv[argnum+1])
-  elif(arg=='-th_sstbl'):
-    th_sstbl = float(sys.argv[argnum+1])
-  elif(arg=='-th_drm'):
-    th_drm = float(sys.argv[argnum+1])
-  elif(arg=='-gr_gpar'):
-    gr_lpar = float(sys.argv[argnum+1])
-  elif(arg=='-th_gcp'):
-    th_gcp = float(sys.argv[argnum+1])
-  elif(arg=='-gr_tblcnt'):
-    gr_tblcnt = float(sys.argv[argnum+1])
-  elif(arg=='-gr_fldcnt'):
-    gr_fldcnt = float(sys.argv[argnum+1])
-  elif(arg=='-gr_mv'):
-    gr_mv = float(sys.argv[argnum+1])
-  elif(arg=='-gr_ind'):
-    gr_ind = float(sys.argv[argnum+1])
-  elif(arg=='-gr_cind'):
-    gr_cind = float(sys.argv[argnum+1])
+  elif(arg=='-tp_rl'):
+    tp_rl = float(sys.argv[argnum+1])
+  elif(arg=='-tp_wl'):
+    tp_wl = float(sys.argv[argnum+1])
+  elif(arg=='-tp_sstbl'):
+    tp_sstbl = float(sys.argv[argnum+1])
+  elif(arg=='-tp_drm'):
+    tp_drm = float(sys.argv[argnum+1])
+  elif(arg=='-tp_lpar'):
+    if int(sys.argv[argnum+1]) <= gr_lpar:
+      tp_lpar = float(sys.argv[argnum+1])
+  elif(arg=='-tp_gcp'):
+    tp_gcp = float(sys.argv[argnum+1])
+  elif(arg=='-tp_tblcnt'):
+    if int(sys.argv[argnum+1]) <= gr_tblcnt:
+      tp_tblcnt = float(sys.argv[argnum+1])
+  elif(arg=='-tp_colcnt'):
+    if int(sys.argv[argnum+1]) <= gr_colcnt:
+      tp_colcnt = float(sys.argv[argnum+1])
+  elif(arg=='-tp_mv'):
+    if int(sys.argv[argnum+1]) <= gr_mv:
+      tp_mv = float(sys.argv[argnum+1])
+  elif(arg=='-tp_si'):
+    if int(sys.argv[argnum+1]) <= gr_si:
+      tp_si = float(sys.argv[argnum+1])
+  elif(arg=='-tp_sai'):
+    if int(sys.argv[argnum+1]) <= gr_sai:
+      tp_sai = float(sys.argv[argnum+1])
 
-gr_tbl_data = {
-    'Materialized Views':{'limit':gr_mv},
-    'Indexes':{'limit':gr_ind},
-    'Custom Indexes':{'limit':gr_cind}
-}
+
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':''})
-sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':''})
-sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(th_drm)+' dropped mutations (cfstats)'})
-sheets_data.append({'sheet_name':'numTables','tab_name':'Table Qty','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':gr_tblcnt,'strip':'','extra':0,'comment':''})
-sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Example Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':gr_lpar*1000000,'strip':'','extra':1,'comment':'Table with partiton sizes greater than '+str(gr_lpar)+' (cfstats)'})
-sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':th_sstbl,'strip':'','extra':1,'comment':''})
-sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_rl,'strip':'ms','extra':0,'comment':''})
-sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':th_wl,'strip':'ms','extra':0,'comment':''})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
+sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':'','tp_type':''})
+sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(tp_drm)+' dropped mutations (cfstats)','tp_type':'drm'})
+sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':0,'comment':'','tp_type':'tblcnt'})
+sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Table with partiton sizes greater than '+str(tp_lpar)+' (cfstats)','tp_type':'lpar'})
+sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':tp_sstbl,'strip':'','extra':1,'comment':'','tp_type':'sstbl'})
+sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_rl,'strip':'ms','extra':0,'comment':'','tp_type':'rl'})
+sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_wl,'strip':'ms','extra':0,'comment':'','tp_type':'wl'})
 #sheets_data.append({'sheet_name':'ts','tab_name':'Tombstones','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'extra':0})
 
+tp_tbl_data = {
+    'Materialized Views':{},
+    'Secondary Indexes':{},
+    'Storage-Attached Indexes':{}
+}
+gr_types={
+  'Materialized Views':{'gr':gr_mv,'tp':tp_mv,'sup_tab':1},
+  'Secondary Indexes':{'gr':gr_si,'tp':tp_si,'sup_tab':1},
+  'Storage-Attached Indexes':{'gr':gr_sai,'tp':tp_sai,'sup_tab':1},
+  'Number of Tables':{'gr':gr_tblcnt,'tp':tp_tblcnt,'sup_tab':0},
+  'Number of Columns':{'gr':gr_colcnt,'tp':tp_colcnt,'sup_tab':0},
+  'Large Partitions':{'gr':gr_lpar,'tp':tp_lpar,'sup_tab':0}
+}
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
 ks_type_abbr = {'app':'Application','sys':'System'}
 
 comments = [
 {
 'fields':['Data Size (GB)','Data Set Size'],
-'comment':["Data Size is a single set of complete data.  It does not include replication data across the cluster"]
+'comment':["Data Size is a single set of complete data.  It does not include replicated data across the database"]
 },{
 'fields':['Read Requests'],
-'comment':["The number of read requests on the coordinator nodes during the nodes uptime, analogous to client writes."]
+'comment':["The number of read requests during the nodes uptime, analogous to client writes."]
 },{
 'fields':['Write Requests'],
-'comment':["The number of write requests on the coordinator nodes during the nodes uptime, analogous to client writes."]
+'comment':["The number of write requests during the nodes uptime, analogous to client writes."]
 },{
 'fields':['% Reads'],
-'comment':["The table's pecentage of the total read requests in the cluster. (See comment in READ TPS)"]
+'comment':["The table's pecentage of the total read requests in the database. (See comment in READ TPS)"]
 },{
 'fields':['% Writes'],
-'comment':["The table's pecentage of the total write requests in the cluster."]
+'comment':["The table's pecentage of the total write requests in the database."]
 },{
 'fields':['R % RW'],
-'comment':["The table's pecentage of read requests of the total RW requests (read and Write) in the cluster. (See comment in READ TPS)"]
+'comment':["The table's pecentage of read requests of the total RW requests (read and Write) in the database. (See comment in READ TPS)"]
 },{
 'fields':['W % RW'],
-'comment':["The table's pecentage of write requests of the total RW requests (read and Write) in the cluster. (See comment in READ TPS)"]
+'comment':["The table's pecentage of write requests of the total RW requests (read and Write) in the database. (See comment in READ TPS)"]
 },{
 'fields':['Average TPS'],
 'comment':["The table's read or write request count divided by the uptime. (See comment in READ TPS)"]
 },{
 'fields':['Read TPS'],
-'comment':["The cluster's average read requests per second based on a read consistancy level (CL) of LOCAL_xx.  The time is determined by the node's uptime."]
+'comment':["The database's average read requests per second based on a local read consistancy level.  The time is determined by the node's uptime."]
 },{
 'fields':['Read TPMo'],
-'comment':["The cluster's average read requests per month (See comment in READ TPS). The month is calculated at 365.25/12 days."]
+'comment':["The database's average read requests per month (See comment in READ TPS). The month is calculated at 365.25/12 days."]
 },{
 'fields':['Write TPS'],
 'comment':["The number of write requests per second on the coordinator nodes, analogous to client writes. The time is determined by the node's uptime."]
 },{
 'fields':['Write TPMo'],
-'comment':["The cluster's average write requests per month. The month is calculated at 365.25/12 days."]
+'comment':["The database's average write requests per month. The month is calculated at 365.25/12 days."]
 },{
 'fields':['Uptime (sec)','Uptime (day)'],
-'comment':["The combined uptime of all nodes in the cluster"]
+'comment':["The combined uptime of all nodes in the database"]
 },{
 'fields':['Total R % RW'],
-'comment':["The total read requests percentage of combined RW requests (read and write) in the cluster. (See comment in READ TPS)"]
+'comment':["The total read requests percentage of combined RW requests (read and write) in the database. (See comment in READ TPS)"]
 },{
 'fields':['Total W % RW'],
-'comment':["The total write requests percentage of combined RW requests (read and write) in the cluster. (See comment in READ TPS)"]
+'comment':["The total write requests percentage of combined RW requests (read and write) in the database. (See comment in READ TPS)"]
 }
 ]
 
 
-# run through each cluster diag file path listed in command line
-for cluster_url in data_url:
+# run through each database diag file path listed in command line
+for database_url in data_url:
 
-  # initialize cluster vaariables
-  cluster_name=''
+  # initialize database vaariables
+  database_name=''
   is_index = 0
   read_subtotal = 0
   write_subtotal = 0
@@ -390,7 +433,7 @@ for cluster_url in data_url:
   table_totals = {}
   total_uptime = 0
   dc_array = []
-  cluster_gcpause = []
+  database_gcpause = []
   node_dc = {}
   dc_list = []
   dc_gcpause = {}
@@ -403,9 +446,9 @@ for cluster_url in data_url:
   max_gc = {}
   exclude_tab = []
   node_uptime = {}
-  warnings = {'Astra Guardrails':{},'Cluster Health':{}}
+  warnings = {'Astra Guardrails':{},'Database Health':{}}
 
-  rootPath = cluster_url + '/nodes/'
+  rootPath = database_url + '/nodes/'
 
   # collect dc info
   for node in os.listdir(rootPath):
@@ -487,15 +530,15 @@ for cluster_url in data_url:
               tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
               src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
               src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-              add_gr_tbl('Indexes',ks,tbl,src_ks,src_tbl)
+              add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
               tbl=''
             elif('CREATE CUSTOM INDEX' in line):
               prev_tbl = tbl
               tbl = line.split()[3].strip('"')
-              tbl_data[ks][tbl] = {'type':'Custom Index', 'cql':line}
+              tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
               src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
               src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-              add_gr_tbl('Custom Indexes',ks,tbl,src_ks,src_tbl)
+              add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
               tbl=''
             elif('CREATE TYPE' in line):
               prev_tbl = tbl
@@ -540,7 +583,7 @@ for cluster_url in data_url:
               if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
                 src_ks = line.split('.')[0].split()[1].strip('"')
                 src_tbl = line.split('.')[1].strip('"')
-                add_gr_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
+                add_tp_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
               elif('PRIMARY KEY' in line):
                 if(line.count('(') == 1):
                   tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
@@ -576,12 +619,12 @@ for cluster_url in data_url:
       dc = ''
       cfstat = rootPath + node + '/nodetool/cfstats'
       tablestat = rootPath + node + '/nodetool/tablestats'
-      clusterpath = rootPath + node + '/nodetool/describecluster'
+      databasepath = rootPath + node + '/nodetool/describecluster'
       infopath = rootPath + node + '/nodetool/info'
 
-      #collect cluster name
-      if (cluster_name == ''):
-        cluster_name = get_param(clusterpath,'Name:',1)
+      #collect database name
+      if (database_name == ''):
+        database_name = get_param(databasepath,'Name:',1)
 
       # collect and analyze uptime and R/W counts from cfstats
       try:
@@ -702,7 +745,7 @@ for cluster_url in data_url:
   
 
   #initialize GC variables
-  cluster_gcpause = []
+  database_gcpause = []
   node_dc = {}
   dc_list = []
   dc_gcpause = {}
@@ -715,7 +758,7 @@ for cluster_url in data_url:
   max_gc = {}
   
   # collect GC Data
-  rootPath = cluster_url + '/nodes/'
+  rootPath = database_url + '/nodes/'
   for node in os.listdir(rootPath):
     systemlogpath = rootPath + node + '/logs/cassandra/'
     systemlog = systemlogpath + 'system.log'
@@ -726,9 +769,9 @@ for cluster_url in data_url:
       statuspath = rootPath + node + '/nodetool/status'
       if(len(node_dc)==0):
         get_dc(statuspath)
-        newest_gc[cluster_name]={'jd':0.0,'dt':''}
-        oldest_gc[cluster_name]={'jd':99999999999.9,'dt':''}
-        max_gc[cluster_name]=''
+        newest_gc[database_name]={'jd':0.0,'dt':''}
+        oldest_gc[database_name]={'jd':99999999999.9,'dt':''}
+        max_gc[database_name]=''
       node_gcpause[node] = []
       newest_gc[node]={'jd':0.0,'dt':''}
       oldest_gc[node]={'jd':99999999999.9,'dt':''}
@@ -756,8 +799,8 @@ for cluster_url in data_url:
             cor_node = node.replace('-','.')
             parseGC(cor_node,systemlog,systemlogpath)
 
-  #collect cluster GC Percents
-  get_gc_data('Cluster',cluster_name,cluster_gcpause,0)
+  #collect database GC Percents
+  get_gc_data('Database',database_name,database_gcpause,0)
 
   for dc, dc_pause in list(dc_gcpause.items()):
     get_gc_data('DC',dc,dc_pause,0)
@@ -773,44 +816,49 @@ for cluster_url in data_url:
 
   # Astra Guardrails
   gr = 'Astra Guardrails'
-  for gr_name, ks_array in list(gr_tbl_data.items()):
-    lmt = gr_tbl_data[gr_name]['limit']
-    try: type(warnings[gr][gr_name])
-    except: warnings[gr][gr_name] = []
-    for ks,tbl_array in list(ks_array.items()):
-      if (ks!='limit' and ks not in system_keyspace):
-        for tbl,gr_array in list(tbl_array.items()):
-          if len(gr_array)>lmt:
-            warnings[gr][gr_name].append(str(len(gr_array))+' '+gr_name+' of '+ks+'.'+tbl)
+  for tp_name, ks_array in list(tp_tbl_data.items()):
+    gr_lmt = gr_types[tp_name]['gr']
+    tp_lmt = gr_types[tp_name]['tp']
+    if gr_types[tp_name]['sup_tab']:
+      try: type(warnings[gr][tp_name])
+      except: warnings[gr][tp_name] = []
+      for ks,tbl_array in list(ks_array.items()):
+        if ks not in system_keyspace:
+          for tbl,tp_array in list(tbl_array.items()):
+            if len(tp_array)>gr_lmt:
+              warnings[gr][tp_name].append(str(len(tp_array))+' '+tp_name+' of '+ks+'.'+tbl+'***')
+            elif len(tp_array)>tp_lmt:
+              warnings[gr][tp_name].append(str(len(tp_array))+' '+tp_name+' of '+ks+'.'+tbl)
 
-  # review field count
+
+
+  # review column count
+  gr_lmt = gr_types['Number of Columns']['gr']
+  tp_lmt = gr_types['Number of Columns']['tp']
   for ks,ks_array in list(tbl_data.items()):
     if (ks not in system_keyspace):
       for tbl,tbl_array in list(ks_array.items()):
-        try:
+        if (tbl!='cql' and tbl!='rf'):
           for tbl_prt,prt_array in list(tbl_array.items()):
             if tbl_prt=='field':
-              if len(prt_array)>gr_fldcnt:
+              if len(prt_array)>gr_lmt:
                 try:
-                  warnings[gr]['Field Qty'].append = 'More than '+str(gr_fldcnt)+' fields in '+ks+'.'+tbl
+                  warnings[gr]['Number of Columns'].append = str(tp_colcnt)+' columns in '+ks+'.'+tbl+'***'
                 except:
-                  warnings[gr]['Field Qty'] = [str(len(prt_array))+' fields in '+ks+'.'+tbl]
-        except:
-          x=1
-
-
-
-
-
-
+                  warnings[gr]['Number of Columns'] = [str(len(prt_array))+' columns in '+ks+'.'+tbl+'***']
+              elif len(prt_array)>tp_lmt:
+                try:
+                  warnings[gr]['Number of Columns'].append = str(tp_colcnt)+' columns in '+ks+'.'+tbl
+                except:
+                  warnings[gr]['Number of Columns'] = [str(len(prt_array))+' columns in '+ks+'.'+tbl]
 
   # Create Workbook
   stats_sheets = {}
   worksheet = {}
-  workbook = xlsxwriter.Workbook(cluster_url + '/' + cluster_name + '_' + 'astra_chart' + '.xlsx')
+  workbook = xlsxwriter.Workbook(database_url + '/' + database_name + '_' + 'astra_chart' + '.xlsx')
   
   # Create Tabs
-  worksheet_chart = workbook.add_worksheet('Astra Chart')
+  worksheet_metrics = workbook.add_worksheet('Astra Metrics')
   worksheet = workbook.add_worksheet('Workload')
   worksheet.freeze_panes(3,0)
   ds_worksheet = workbook.add_worksheet('Data Size')
@@ -1050,7 +1098,7 @@ for cluster_url in data_url:
   total_t_size = 0
   total_set_size = 0.0
   total_row = {'read':0,'write':0,'size':0,'node':0}
-  cluster_name = ''
+  database_name = ''
   prev_nodes = []
   stat_sheets = {}
   headers = {}
@@ -1059,13 +1107,15 @@ for cluster_url in data_url:
   row = {}
   node_status = 1
   proxyhistData = {}
+  lpar_gr_array=[]
+  lpar_tp_array=[]
 
   for node in os.listdir(rootPath):
     ckpath = rootPath + node + '/nodetool'
     if(path.isdir(ckpath)):
-      if cluster_name == '':
-        clusterpath = rootPath + node + '/nodetool/describecluster'
-        cluster_name = get_param(clusterpath,'Name:',1)
+      if database_name == '':
+        databasepath = rootPath + node + '/nodetool/describecluster'
+        database_name = get_param(databasepath,'Name:',1)
 
         for sheet_array in sheets_data:
           if (sheet_array['sheet_name'] not in exclude_tab):
@@ -1116,42 +1166,56 @@ for cluster_url in data_url:
         stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
         stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
       # collect data from the cfstats log file
-      keyspace = ''
-      table = ''
+      ks = ''
+      tbl = ''
       cfstat = rootPath + node + '/nodetool/cfstats'
       cfstatFile = open(cfstat, 'r')
       for line in cfstatFile:
         if('Keyspace' in line):
-          keyspace = line.split(':')[1].strip()
-        elif('Table: ' in line and keyspace not in system_keyspace):
-          table = line.split(':')[1].strip()
-        elif(':' in line and keyspace not in system_keyspace):
+          ks = line.split(':')[1].strip()
+        elif('Table: ' in line and ks not in system_keyspace):
+          tbl = line.split(':')[1].strip()
+        elif(':' in line and ks not in system_keyspace):
           header = line.split(':')[0].strip()
           value = line.split(':')[1].strip()
-          row_data = [node,dc,keyspace,table,header,value]
- 
+          row_data = [node,dc,ks,tbl,header,value]
           for sheet_array in sheets_data:
             if (sheet_array['sheet_name'] not in exclude_tab):
               if(sheet_array['cfstat_filter'] and sheet_array['cfstat_filter'] in line):
                 value = line.split(':')[1].strip()
-                row_data = [node,dc,keyspace,table,value]
+                row_data = [node,dc,ks,tbl,value]
                 if (sheet_array['filter_type']):
                   value = value.strip(sheet_array['strip'])
                   if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
-                    try:
-                      type(warnings['Cluster Health'][sheet_array['tab_name']])
-                    except:
-                      if sheet_array['sheet_name']=='numTables' or sheet_array['sheet_name']=='partition':
-                        warnings['Astra Guardrails'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
-                      else:
-                        warnings['Cluster Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
-                    if(sheet_array['sheet_name']=='partition'):
+                    if sheet_array['sheet_name']=='numTables' or sheet_array['sheet_name']=='partition':
+                      try:
+                        type(warnings['Astra Guardrails'][sheet_array['tab_name']])
+                      except:
+                        warnings['Astra Guardrails'][sheet_array['tab_name']]=[]
+                      if(sheet_array['sheet_name']=='numTables' and len(warnings['Astra Guardrails'][sheet_array['tab_name']])==0):
+                        if (float(value)>=gr_tblcnt):
+                          warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database***')
+                        else:
+                          warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database')
+                      elif sheet_array['sheet_name']=='partition':
+                        table_data = dc+ks+tbl
+                        if float(value)>=gr_lpar*1000000:
+                          if table_data not in lpar_gr_array:
+                            lpar_gr_array.append(table_data)
+                            warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB***')
+                        elif table_data not in lpar_tp_array:
+                          lpar_tp_array.append(table_data)
+                          warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB')
                         row_data[4] = str(int(value)/1000000)
+                    else:
+                      warnings['Database Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
+                        
                     if(sheet_array['extra']):
                       sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
                       row[sheet_array['sheet_name']]+=1
                     else:
                       write_row(sheet_array['sheet_name'],row_data,data_format)
+
                 else:
                   write_row(sheet_array['sheet_name'],row_data,data_format)
 
@@ -1216,7 +1280,7 @@ for cluster_url in data_url:
 
   column=0
   for name, gc_val in list(gc_data.items()):
-    if(gc_val['Level']=='Cluster'):
+    if(gc_val['Level']=='Database'):
       row+=1
       for field in gc_fields:
         if(field=='From'):
@@ -1277,7 +1341,7 @@ for cluster_url in data_url:
     worksheet.set_column(column,column,col_width)
     column+=1
 
-  worksheet.merge_range('A1:M1', 'Workload for '+cluster_name, title_format3)
+  worksheet.merge_range('A1:M1', 'Workload for '+database_name, title_format3)
   worksheet.merge_range('A2:F2', 'Reads', title_format)
   worksheet.merge_range('H2:M2', 'Writes', title_format)
 
@@ -1374,55 +1438,55 @@ for cluster_url in data_url:
   worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
   write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
 
-  # create the Astra Chart tab
-  worksheet_chart.set_column(0,0,30)
-  worksheet_chart.set_column(1,1,20)
+  # create the Astra Metrics tab
+  worksheet_metrics.set_column(0,0,30)
+  worksheet_metrics.set_column(1,1,20)
 
   row=2
   column=0
-  worksheet_chart.merge_range('A1:B1', 'Astra Migration Data for '+cluster_name, title_format3)
-  worksheet_chart.merge_range('A2:B2', 'Workload Summary', header_format5)
-  worksheet_chart.write(row,column,'Read TPS',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_chart.write_formula('B'+str(row+1),'=Workload!D'+str(total_row['read']+1),num_format_lg)
-  worksheet_chart.write(row+1,column,'Read TPMo',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_chart.write_formula('B'+str(row+2),'=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',num_format_lg)
-  worksheet_chart.write(row+2,column,'Write TPS',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_chart.write_formula('B'+str(row+3),'=Workload!K'+str(total_row['write']+1),num_format_lg)
-  worksheet_chart.write(row+3,column,'Write TPMo',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_chart.write_formula('B'+str(row+4),'=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',num_format_lg)
-  worksheet_chart.write(row+4,column,'Data Size (GB)',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Data Size')
-  worksheet_chart.write_formula('B'+str(row+5),"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',num_format_lg)
-  worksheet_chart.write(row+5,column,'Average Uptime',title_format4)
-  write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
-  worksheet_chart.write_formula('B'+str(row+6),"='Node Data'!G"+str(total_row['node']+1),data_format_lg)
+  worksheet_metrics.merge_range('A1:B1', 'Astra Metrics Data for '+database_name, title_format3)
+  worksheet_metrics.merge_range('A2:B2', 'Workload Summary', header_format5)
+  worksheet_metrics.write(row,column,'Read TPS',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+1),'Read TPS')
+  worksheet_metrics.write_formula('B'+str(row+1),'=Workload!D'+str(total_row['read']+1),num_format_lg)
+  worksheet_metrics.write(row+1,column,'Read TPMo',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
+  worksheet_metrics.write_formula('B'+str(row+2),'=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',num_format_lg)
+  worksheet_metrics.write(row+2,column,'Write TPS',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+3),'Write TPS')
+  worksheet_metrics.write_formula('B'+str(row+3),'=Workload!K'+str(total_row['write']+1),num_format_lg)
+  worksheet_metrics.write(row+3,column,'Write TPMo',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
+  worksheet_metrics.write_formula('B'+str(row+4),'=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',num_format_lg)
+  worksheet_metrics.write(row+4,column,'Data Size (GB)',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+5),'Data Size (GB)')
+  worksheet_metrics.write_formula('B'+str(row+5),"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',num_format_lg)
+  worksheet_metrics.write(row+5,column,'Average Uptime',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
+  worksheet_metrics.write_formula('B'+str(row+6),"='Node Data'!G"+str(total_row['node']+1),data_format_lg)
 
   row+=7
   start_row=row
   for warn_cat_title,warn_cat_array in list(warnings.items()):
     row+=1
-    worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_cat_title,header_format5)
+    worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn_cat_title,header_format5)
     row+=1
     for warn_title,warn_array in list(warn_cat_array.items()):
       if (len(warn_array)):
-        worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn_title,title_format4)
-        write_cmt(worksheet_chart,chr(ord('@')+column+1)+str(row),warn_title)
+        worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn_title,title_format4)
+        write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row),warn_title)
         row+=1
         for warn in warn_array:
-          worksheet_chart.merge_range('A'+str(row)+':B'+str(row),warn,data_format1)
+          worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn,data_format1)
           row+=1
   if (row==start_row):
-    worksheet_chart.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
+    worksheet_metrics.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
     row+=2
 
-  worksheet_chart.insert_textbox('D2',info_box,info_box_options)
+  worksheet_metrics.insert_textbox('D2',info_box,info_box_options)
 
-  worksheet_chart.activate()
+  worksheet_metrics.activate()
   workbook.close()
-  print((('"' + cluster_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + cluster_url) +'"'))
+  print((('"' + database_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + database_url) +'"'))
 exit();
 
