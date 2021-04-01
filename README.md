@@ -78,7 +78,7 @@ Cluster Health
 
 <!-- GETTING STARTED -->
 ## Getting Started
-Install XlsxWriter and Pandas
+Install XlsxWriter (https://xlsxwriter.readthedocs.io/getting_started.html)
 
 After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
 Note: If you are using the Cassandra Diagnostic Collection tool, it is easiest to collect a complete cluster diag tarball at once using:
@@ -109,4 +109,72 @@ python explore.py -p [path_to_diag_folder1] -p [path_to_diag_folder2] -p [path_t
 There is a brief help info section:
 ```
 python explore.py --help
-``` 
+
+usage: look.py [-h] [--help] [-inc_yaml]
+                       [-p PATH_TO_DIAG_FOLDER]
+                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]
+                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]
+                       [-tp_si SECONDARY INDEX_GUARDRAIL]
+                       [-tp_sai STORAGE_ATTACHED_INDEX_GUARDRAIL]
+                       [-tp_lpar LARGE_PARTITON_SIZE_GUARDRAIL]
+                       [-tp_rl READ_LATENCY_THRESHOLD]
+                       [-tp_wl WRITE_LATENCY_THRESHOLD]
+                       [-tp_sstbl SSTABLE_COUNT_THRESHOLD]
+                       [-tp_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]
+required arguments:
+-p                     Path to the diagnostics folder
+                        Multiple diag folders accepted
+                        i.e. -p PATH1 -p PATH2 -p PATH3
+optional arguments:
+-v, --version          Version
+-h, --help             This help info
+-tp_tblcnt             Database Table Count (Guardrail)
+                        Number of tables in the database
+                        to be listed in the Number of Tables tab
+                        Astra Guardrail Limit: 200
+                        Test Parameter: >175
+-tp_colcnt             Table Column Count (Guardrail)
+                        Number of columns in a table
+                        Astra Guardrail Limit: 50
+                        Test Parameter: >45
+-tp_mv                 Materialized Views  (Guardrail)
+                        Number of Materialized Views of a table
+                        Astra Guardrail Limit: 2
+                        Test Parameter: >2
+-tp_si                Secondary Indexes  (Guardrail)
+                        Number of Secondary Indexes of a table
+                        Astra Guardrail Limit: 1
+                        Test Parameter: >1
+-tp_sai                Storage Attached Indexes  (Guardrail)
+                        Number of SAI of a table
+                        Astra Guardrail Limit: 10
+                        Test Parameter: >8
+-tp_lpar               Large Partitions (Guardrail)
+                        Size of partition in MB
+                        to be listed in the Large Partition tab
+                        Astra Guardrail Limit: 200MB
+                        Test Parameter: >100
+-tp_rl                 Local Read Latency (Database Health)
+                        Local read time(ms) in the cfstats log
+                        to be listed in the Read Latency tab
+                        Test Parameter: >100
+-tp_wl                 Local Write Latency (Database Health)
+                        Local write time(ms) in the cfstats log
+                        to be listed in the Read Latency tab
+                        Test Parameter: >100
+-tp_sstbl              SSTable Count (Database Health)
+                        SStable count in the cfstats log
+                        to be listed in the Table Qantity tab
+                        Test Parameter: >20
+-tp_drm                Dropped Mutations (Database Health)
+                        Dropped Mutation count in the cfstats log
+                        to be listed in the Dropped Mutation tab
+                        Test Parameter: >100000
+
+-tp_gcp                GCPauses (Database Health)
+                        Node P99 GC pause time (ms)
+                        to be listed in the GC Pauses tab
+                        Test Parameter: >800
+
+Notice: Test parameters cannot be larger than guardrails
+```
