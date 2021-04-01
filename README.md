@@ -38,7 +38,7 @@ Node Data
 Node R/W Latency Proxihistogram
  * P99/P98/P95/P75/P50
 
-A list of the following above a threshhold value
+A list of the following above a test parameter
  * Dropped Mutations (Node/Keyspace/Table)
  * Table Count per DC;
  * Large Partitions;
@@ -46,7 +46,6 @@ A list of the following above a threshhold value
  * Read Latency (over 5ms);
  * Write Latency (over 1ms);
  * Tombstones (Future version)
-
 
 <!-- ORIGINS OF THE CODE -->
 ## Origins of the Code
@@ -56,25 +55,38 @@ The Astra-Perseverance was appropriatelly named after the NASA Mars Rover - Pers
 
 <!-- ITEMS ANALYZED -->
 ## Items Analyzed
-The following items are analzed for potential issues with migration to Astra:
+The following items are analzed for potential issues with migration to Astra. The test parameters may be changed with arguments in the command line.
 
-Astra Guardrails
+### Astra Guardrails
+ * Number of materialized views per table
+   - Guardrail limit: 2
+   - Test Parameter: 2
+ * Number of secondary indexes per table
+   - Guardrail limit: 1
+   - Test Parameter: 1
+ * Number of storage-attached indexes per table
+   - Guardrail limit: 10
+   - Test Parameter: 8
+ * Number of tables in a keyspace
+   - Guardrail limit: 200
+   - Test Parameter: 175
+ * Number of fields in a table
+   - Guardrail limit: 50
+   - Test Parameter: 45
+ * Large partition size (MB)
+   - Guardrail limit: 200
+   - Test Parameter: 100
+ * Use of UDA and UDF
 
-- Number of materialized views per table
- - Number of indexes per table
- - Number of custom indexes per table
- - Number of tables in a keyspace
- - Number of fields in a table
- - Partition size (MB)
- - Use of UDA and UDF
-
-Cluster Health
-
-- Node read latency (ms)
- - Node write latency (ms)
- - Node P99 GC pause time
- - Number of dropped mutations per node/table
-
+### Cluster Health
+ * Local read latency (ms)
+   - Test Parameter: 100
+ * Local write latency (ms)
+   - Test Parameter: 100
+ * Node P99 GC pause time (ms)
+   - Test Parameter: 800
+ * Number of dropped mutations per table
+   - Test Parameter: 100000
 
 <!-- GETTING STARTED -->
 ## Getting Started
@@ -104,30 +116,8 @@ You may run the script on multiple diagnostic folders:
 ```
 python explore.py -p [path_to_diag_folder1] -p [path_to_diag_folder2] -p [path_to_diag_folder3]
 ```
-
-#### Help
-There is a brief help info section:
+#### Changing Test Parameters
 ```
-python explore.py --help
-
-usage: look.py [-h] [--help] [-inc_yaml]
-                       [-p PATH_TO_DIAG_FOLDER]
-                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]
-                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]
-                       [-tp_si SECONDARY INDEX_GUARDRAIL]
-                       [-tp_sai STORAGE_ATTACHED_INDEX_GUARDRAIL]
-                       [-tp_lpar LARGE_PARTITON_SIZE_GUARDRAIL]
-                       [-tp_rl READ_LATENCY_THRESHOLD]
-                       [-tp_wl WRITE_LATENCY_THRESHOLD]
-                       [-tp_sstbl SSTABLE_COUNT_THRESHOLD]
-                       [-tp_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]
-required arguments:
--p                     Path to the diagnostics folder
-                        Multiple diag folders accepted
-                        i.e. -p PATH1 -p PATH2 -p PATH3
-optional arguments:
--v, --version          Version
--h, --help             This help info
 -tp_tblcnt             Database Table Count (Guardrail)
                         Number of tables in the database
                         to be listed in the Number of Tables tab
@@ -175,6 +165,11 @@ optional arguments:
                         Node P99 GC pause time (ms)
                         to be listed in the GC Pauses tab
                         Test Parameter: >800
-
+```
 Notice: Test parameters cannot be larger than guardrails
+
+#### Help
+There is a help section:
+```
+python explore.py --help
 ```
