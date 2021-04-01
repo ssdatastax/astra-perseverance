@@ -78,7 +78,7 @@ Cluster Health
 
 <!-- GETTING STARTED -->
 ## Getting Started
-Install XlsxWriter and Pandas
+Install XlsxWriter (https://xlsxwriter.readthedocs.io/getting_started.html)
 
 After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
 Note: If you are using the Cassandra Diagnostic Collection tool, it is easiest to collect a complete cluster diag tarball at once using:
