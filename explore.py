@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 #pip install xlsxwriter
-#pip install Pandas
 # Astra Perseverance Version
 version = "1.0.0"
 
@@ -332,7 +331,7 @@ sheets_data = []
 sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(tp_drm)+' dropped mutations (cfstats)','tp_type':'drm'})
-sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':0,'comment':'','tp_type':'tblcnt'})
+sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Sample Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':1,'comment':'','tp_type':'tblcnt'})
 sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Table with partiton sizes greater than '+str(tp_lpar)+' (cfstats)','tp_type':'lpar'})
 sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':tp_sstbl,'strip':'','extra':1,'comment':'','tp_type':'sstbl'})
 sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_rl,'strip':'ms','extra':0,'comment':'','tp_type':'rl'})
