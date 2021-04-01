@@ -223,7 +223,7 @@ for argnum,arg in enumerate(sys.argv):
   if(arg=='-h' or arg =='--help'):
     help_content = \
       'usage: look.py [-h] [--help] [-inc_yaml]\n'\
-      '                       [-p PAtp_TO_DIAG_FOLDER]\n'\
+      '                       [-p PATH_TO_DIAG_FOLDER]\n'\
       '                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
       '                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
       '                       [-tp_si SECONDARY INDEX_GUARDRAIL]\n'\
