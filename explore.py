@@ -351,6 +351,10 @@ gr_types={
   'Number of Columns':{'gr':gr_colcnt,'tp':tp_colcnt,'sup_tab':0},
   'Large Partitions':{'gr':gr_lpar,'tp':tp_lpar,'sup_tab':0}
 }
+#do not include keyspaces
+dni_keyspace = ['OpsCenter']
+
+#system keyspaces
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
 ks_type_abbr = {'app':'Application','sys':'System'}
 
@@ -489,119 +493,121 @@ for database_url in data_url:
               ks = line.split()[2].strip('"')
               tbl_data[ks] = {'cql':line,'rf':0}
               rf=0;
-              for dc_name in dc_array:
-                if ("'"+dc_name+"':" in line):
-                  i=0
-                  for prt in line.split():
-                    prt_chk = "'"+dc_name+"':"
-                    if (prt==prt_chk):
-                      rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                      try:
-                        type(dc_ks_rf[dc_name])
-                      except:
-                        dc_ks_rf[dc_name] = {}
-                      try:
-                        type(dc_ks_rf[dc_name][ks])
-                      except:
-                        dc_ks_rf[dc_name][ks] = rf
-                      tbl_data[ks]['rf']+=float(rf)
-                    i+=1
-                elif("'replication_factor':" in line):
-                  i=0
-                  for prt in line.split():
-                    prt_chk = "'replication_factor':"
-                    if (prt==prt_chk):
-                      rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                      try:
-                        type(dc_ks_rf[dc_name])
-                      except:
-                        dc_ks_rf[dc_name] = {}
-                      try:
-                        type(dc_ks_rf[dc_name][ks])
-                      except:
-                        dc_ks_rf[dc_name][ks] = rf
-                      tbl_data[ks]['rf']+=float(rf)
-                    i+=1
-                else:tbl_data[ks]['rf']=float(1)
-            elif('CREATE INDEX' in line):
-              prev_tbl = tbl
-              tbl = line.split()[2].strip('"')
-              tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
-              src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-              src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-              add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
-              tbl=''
-            elif('CREATE CUSTOM INDEX' in line):
-              prev_tbl = tbl
-              tbl = line.split()[3].strip('"')
-              tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
-              src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-              src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-              add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
-              tbl=''
-            elif('CREATE TYPE' in line):
-              prev_tbl = tbl
-              tbl_line = line.split()[2].strip('"')
-              tbl = tbl_line.split('.')[1].strip().strip('"')
-              tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
-              tbl_data[ks][tbl]['field'] = {}
-            elif('CREATE AGGREGATE' in line):
-              prev_tbl = tbl
-              if 'IF NOT EXISTS' in line:
+              if ks not in dni_keyspace:
+                for dc_name in dc_array:
+                  if ("'"+dc_name+"':" in line):
+                    i=0
+                    for prt in line.split():
+                      prt_chk = "'"+dc_name+"':"
+                      if (prt==prt_chk):
+                        rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                        try:
+                          type(dc_ks_rf[dc_name])
+                        except:
+                          dc_ks_rf[dc_name] = {}
+                        try:
+                          type(dc_ks_rf[dc_name][ks])
+                        except:
+                          dc_ks_rf[dc_name][ks] = rf
+                        tbl_data[ks]['rf']+=float(rf)
+                      i+=1
+                  elif("'replication_factor':" in line):
+                    i=0
+                    for prt in line.split():
+                      prt_chk = "'replication_factor':"
+                      if (prt==prt_chk):
+                        rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                        try:
+                          type(dc_ks_rf[dc_name])
+                        except:
+                          dc_ks_rf[dc_name] = {}
+                        try:
+                          type(dc_ks_rf[dc_name][ks])
+                        except:
+                          dc_ks_rf[dc_name][ks] = rf
+                        tbl_data[ks]['rf']+=float(rf)
+                      i+=1
+                  else:tbl_data[ks]['rf']=float(1)
+            if ks not in dni_keyspace:
+              if('CREATE INDEX' in line):
+                prev_tbl = tbl
                 tbl = line.split()[2].strip('"')
-              else:
-                tbl = line.split()[5].strip('"')
-              tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
-              tbl_data[ks][tbl]['field'] = {}
-              try:
-                warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
-              except:
-                warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
-            elif('CREATE OR REPLACE FUNCTION' in line):
-              prev_tbl = tbl
-              tbl = line.split()[4].strip('"')
-              tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
-              tbl_data[ks][tbl]['field'] = {}
-              try:
-                warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
-              except:
-                warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
-            elif('CREATE TABLE' in line):
-              prev_tbl = tbl
-              tbl_line = line.split()[2].strip('"')
-              tbl = tbl_line.split('.')[1].strip().strip('"')
-              tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
-              tbl_data[ks][tbl]['field'] = {}
-            elif('CREATE MATERIALIZED VIEW' in line ):
-              prev_tbl = tbl
-              tbl_line = line.split()[3].strip('"')
-              tbl = tbl_line.split('.')[1].strip().strip('"')
-              tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
-              tbl_data[ks][tbl]['field'] = {}
-            if (tbl !=''):
-              if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
-                src_ks = line.split('.')[0].split()[1].strip('"')
-                src_tbl = line.split('.')[1].strip('"')
-                add_tp_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
-              elif('PRIMARY KEY' in line):
-                if(line.count('(') == 1):
-                  tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
-                  tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
-                  del tbl_data[ks][tbl]['cc'][0]
-                elif(line.count('(') == 2):
-                  tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
-                  tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
-                tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
-              elif line.strip() != ');':
+                tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
+                src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
+                tbl=''
+              elif('CREATE CUSTOM INDEX' in line):
+                prev_tbl = tbl
+                tbl = line.split()[3].strip('"')
+                tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
+                src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
+                tbl=''
+              elif('CREATE TYPE' in line):
+                prev_tbl = tbl
+                tbl_line = line.split()[2].strip('"')
+                tbl = tbl_line.split('.')[1].strip().strip('"')
+                tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
+                tbl_data[ks][tbl]['field'] = {}
+              elif('CREATE AGGREGATE' in line):
+                prev_tbl = tbl
+                if 'IF NOT EXISTS' in line:
+                  tbl = line.split()[2].strip('"')
+                else:
+                  tbl = line.split()[5].strip('"')
+                tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
+                tbl_data[ks][tbl]['field'] = {}
                 try:
-                  tbl_data[ks][tbl]['cql'] += ' ' + line
-                  if('AND ' not in line and ' WITH ' not in line):
-                    fld_name = line.split()[0]
-                    fld_type = line.split()[1].strip(',')
-                    if (fld_name!='CREATE'):
-                      tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                  warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
                 except:
-                  print(('Error1:' + ks + '.' + tbl + ' - ' + line))
+                  warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
+              elif('CREATE OR REPLACE FUNCTION' in line):
+                prev_tbl = tbl
+                tbl = line.split()[4].strip('"')
+                tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
+                tbl_data[ks][tbl]['field'] = {}
+                try:
+                  warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
+                except:
+                  warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
+              elif('CREATE TABLE' in line):
+                prev_tbl = tbl
+                tbl_line = line.split()[2].strip('"')
+                tbl = tbl_line.split('.')[1].strip().strip('"')
+                tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
+                tbl_data[ks][tbl]['field'] = {}
+              elif('CREATE MATERIALIZED VIEW' in line ):
+                prev_tbl = tbl
+                tbl_line = line.split()[3].strip('"')
+                tbl = tbl_line.split('.')[1].strip().strip('"')
+                tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
+                tbl_data[ks][tbl]['field'] = {}
+              if (tbl !=''):
+                if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
+                  src_ks = line.split('.')[0].split()[1].strip('"')
+                  src_tbl = line.split('.')[1].strip('"')
+                  add_tp_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
+                elif('PRIMARY KEY' in line):
+                  if(line.count('(') == 1):
+                    tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
+                    tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
+                    del tbl_data[ks][tbl]['cc'][0]
+                  elif(line.count('(') == 2):
+                    tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
+                    tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
+                  tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
+                elif line.strip() != ');':
+                  try:
+                    tbl_data[ks][tbl]['cql'] += ' ' + line
+                    if('AND ' not in line and ' WITH ' not in line):
+                      fld_name = line.split()[0]
+                      fld_type = line.split()[1].strip(',')
+                      if (fld_name!='CREATE'):
+                        tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                  except:
+                    print(('Error1:' + ks + '.' + tbl + ' - ' + line))
   if (is_nodes==0):
     exit('No Node Info')
 
@@ -640,9 +646,9 @@ for database_url in data_url:
         line = line.strip('\n').strip()
         if (line==''): tbl = ''
         else:
-          if('Keyspace' in line):
+          if 'Keyspace' in line:
             ks = line.split(':')[1].strip()
-          if (ks!=''):
+          if ks!='' and ks not in dni_keyspace:
             try:
               type(table_tps[ks])
             except:
