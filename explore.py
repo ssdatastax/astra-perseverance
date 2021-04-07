@@ -106,18 +106,21 @@ def extract_ip(ip_text):
 # this is specifically used for adding the node uptime on the node tab
 def find_ip_addr(node):
   systemlog = rootPath + node + '/logs/cassandra/system.log'
-  systemlogFile = open(systemlog, 'r')
-  for line in systemlogFile:
-    if node in line:
-      try:
-        ip_text =line.split(node)[1].split()[0].strip('/')
-        ip_adr = extract_ip(ip_text)
-        node_ip[node]=ip_adr
-        systemlogFile.close()
-        return 0
-      except:
-        cont=1
-  systemlogFile.close()
+  if path.isfile(systemlog):
+    systemlogFile = open(systemlog, 'r')
+    for line in systemlogFile:
+      if node in line:
+        try:
+          ip_text =line.split(node)[1].split()[0].strip('/')
+          ip_adr = extract_ip(ip_text)
+          node_ip[node]=ip_adr
+          systemlogFile.close()
+          return 0
+        except:
+          cont=1
+    systemlogFile.close()
+  else:
+    exit('The system log file for node ' + node + ' is not available (' + systemlog +')')
   return 1
 
 # collect the dc name for each node
