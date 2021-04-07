@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 #pip install xlsxwriter
+#pip install pandas
+
 # Astra Perseverance Version
 version = "1.0.0"
 
@@ -29,35 +31,35 @@ gr_lpar = 200     # Partition size (MB)
 
 
 info_box = 'DataStax Perseverance\n'\
-                'Version '+version+'\n'\
-                'This script is intended to be used as a guide.  Not all guardrails\n'\
-                'are included in this sheet. Please view current Astra guardrials at\n'\
-                'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n\n'\
-                'Astra Guardrail Limits\n'\
-                ' - '+str(gr_mv)+' materialized views per table\n'\
-                ' - '+str(gr_si)+' secondary index per table\n'\
-                ' - '+str(gr_sai)+' storage-attached indexes per table\n'\
-                ' - '+str(gr_tblcnt)+' tables in the database\n'\
-                ' - '+str(gr_colcnt)+' columns in a table\n'\
-                ' - '+str(gr_lpar)+'MB Partition\n'\
-                ' - Use of UDA and UDF\n'\
-                'The following items are analyzed with Astra Perseverance:\n'\
-                'Astra Guardrail Test Parameters\n'\
-                ' - More than '+str(tp_mv)+' materialized views per table\n'\
-                ' - More than '+str(tp_si)+' secondary index per table\n'\
-                ' - More than '+str(tp_sai)+' storage-attached indexes per table\n'\
-                ' - More than '+str(tp_tblcnt)+' tables in the database\n'\
-                ' - More than '+str(tp_colcnt)+' columns in a table\n'\
-                ' - Partition size greater than '+str(tp_lpar)+'MB\n'\
-                ' - Use of UDA and UDF\n'\
-               'Database Health Test Parameters\n'\
-                ' - Local table read latency more than '+str(tp_rl)+'ms\n'\
-                ' - Local table write latency more than '+str(tp_wl)+'ms\n'\
-                ' - Node P99 GC pause time greater than '+str(tp_gcp)+'ms\n'\
-                ' - More than '+str(tp_sstbl)+' SSTables per table\n'\
-                ' - More than '+str(tp_drm)+' dropped mutations per table\n\n'\
-                '*** VALUES THAT HAVE GONE BEYOND THE GUARDRAILS\n'\
-                'Supported data in separate spreadsheet tabs'\
+              'Version '+version+'\n'\
+              'This script is intended to be used as a guide.  Not all guardrails\n'\
+              'are included in this sheet. Please view current Astra guardrials at\n'\
+              'https://docs.datastax.com/en/astra/docs/datastax-astra-database-limits.html\n\n'\
+              'Astra Guardrail Limits\n'\
+              ' - '+str(gr_mv)+' materialized views per table\n'\
+              ' - '+str(gr_si)+' secondary index per table\n'\
+              ' - '+str(gr_sai)+' storage-attached indexes per table\n'\
+              ' - '+str(gr_tblcnt)+' tables in the database\n'\
+              ' - '+str(gr_colcnt)+' columns in a table\n'\
+              ' - '+str(gr_lpar)+'MB Partition\n'\
+              ' - Use of UDA and UDF\n'\
+              'The following items are analyzed with Astra Perseverance:\n'\
+              'Astra Guardrail Test Parameters\n'\
+              ' - More than '+str(tp_mv)+' materialized views per table\n'\
+              ' - More than '+str(tp_si)+' secondary index per table\n'\
+              ' - More than '+str(tp_sai)+' storage-attached indexes per table\n'\
+              ' - More than '+str(tp_tblcnt)+' tables in the database\n'\
+              ' - More than '+str(tp_colcnt)+' columns in a table\n'\
+              ' - Partition size greater than '+str(tp_lpar)+'MB\n'\
+              ' - Use of UDA and UDF\n'\
+             'Database Health Test Parameters\n'\
+              ' - Local table read latency more than '+str(tp_rl)+'ms\n'\
+              ' - Local table write latency more than '+str(tp_wl)+'ms\n'\
+              ' - Node P99 GC pause time greater than '+str(tp_gcp)+'ms\n'\
+              ' - More than '+str(tp_sstbl)+' SSTables per table\n'\
+              ' - More than '+str(tp_drm)+' dropped mutations per table\n\n'\
+              '*** VALUES THAT HAVE GONE BEYOND THE GUARDRAILS\n'\
+              'Supported data in separate spreadsheet tabs'\
  
 #
 info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
@@ -66,8 +68,8 @@ info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'fo
 import os.path
 from os import path
 import xlsxwriter
-import sys
 import pandas as pd
+import sys
 import datetime
 import re
 import zipfile
@@ -93,25 +95,72 @@ def add_tp_tbl(gr,ks,tbl,src_ks,src_tbl):
       tp_tbl_data[gr][src_ks][src_tbl].append(ks+'.'+tbl)
 
 
+def extract_ip(ip_text):
+  ip_add = []
+  ips = re.findall(r'[0-9]+(?:\.[0-9]+){3}', ip_text)
+  for ip in ips:
+          ip_add.append(ip)
+  return ''.join(ip_add)
+
+# the node_ip is created in case the directory name (or node) is not the ip address
+# this is specifically used for adding the node uptime on the node tab
+def find_ip_addr(node):
+  systemlog = rootPath + node + '/logs/cassandra/system.log'
+  systemlogFile = open(systemlog, 'r')
+  for line in systemlogFile:
+    if node in line:
+      try:
+        ip_text =line.split(node)[1].split()[0].strip('/')
+        ip_adr = extract_ip(ip_text)
+        node_ip[node]=ip_adr
+        systemlogFile.close()
+        return 0
+      except:
+        cont=1
+  systemlogFile.close()
+  return 1
 
 # collect the dc name for each node
-def get_dc(statuspath):
+def get_dc(rootPath,statuspath,node):
   if(path.exists(statuspath)):
     statusFile = open(statuspath, 'r')
     dc = ''
-    node = ''
+    next_ip=1
     for line in statusFile:
       if('Datacenter:' in line):
         dc = str(line.split(':')[1].strip())
+        try:
+          type(node_status_data[dc])
+        except:
+          node_status_data[dc]={}
         if dc not in dc_array:
           dc_array.append(dc)
-        dc_gcpause[dc]=[]
-        newest_gc[dc]={'jd':0.0,'dt':''}
-        oldest_gc[dc]={'jd':99999999999.9,'dt':''}
-        max_gc[dc]=''
-      elif(line.count('.')>=3):
-        node = str(line.split()[1].strip())
-        node_dc[node] = dc
+          dc_gcpause[dc]=[]
+          newest_gc[dc]={'jd':0.0,'dt':''}
+          oldest_gc[dc]={'jd':99999999999.9,'dt':''}
+          max_gc[dc]=''
+      if line.count('.')>=3:
+        ip_addr = line.split()[1]
+        if ip_addr in ip_node:
+          node_name = ip_node[ip_addr]
+          try:
+            type(node_dc[node_name])
+          except:
+            node_dc[node_name]=dc
+          try:
+            type(node_status_data[dc][node_name])
+          except:
+            values = line.split();
+            node_status_data[dc][node_name] = {'Load':values[2] + ' ' + values[3],'Tokens':int(values[4]),'Rack':values[7]}
+        else:
+          try:
+            type(warnings['Missing Node Data'])
+          except:
+            warnings['Missing Data']={'Missing Node Data':[]}
+          warn_val=ip_addr
+          if warn_val not in warnings['Missing Data']['Missing Node Data']:
+            warnings['Missing Data']['Missing Node Data'].append(warn_val)
+          
   else:
     exclude_tab.append('node')
 
@@ -132,7 +181,10 @@ def parseGC(node,systemlog,systemlogpath):
       gcpause = line[line.find('GC in')+6:line.find('ms.')]
       ldatetime = dt + ' ' + re.sub(',.*$','',tm.strip())
       log_dt = datetime.datetime.strptime(ldatetime,log_df)
-      log_jd = pd.Timestamp(year=log_dt.year,month=log_dt.month,day=log_dt.day,hour=log_dt.hour,minute=log_dt.minute,tz=tz[node]).to_julian_date()
+      try:
+        log_jd = pd.Timestamp(year=log_dt.year,month=log_dt.month,day=log_dt.day,hour=log_dt.hour,minute=log_dt.minute,tz=tz[node]).to_julian_date()
+      except:
+        exit('Installation of Pandas required')
       database_gcpause.append(int(gcpause))
       dc_gcpause[dc].append(int(gcpause))
       node_gcpause[node].append(int(gcpause))
@@ -188,7 +240,14 @@ def sortFunc(e):
 def write_row(sheet_name,row_data,d_format,blank_col=[]):
   for col_num,data in enumerate(row_data):
     if col_num not in blank_col:
-      stats_sheets[sheet_name].write(row[sheet_name],col_num, data, d_format)
+      try:
+        if (sheet_name=='ph' or sheet_name=='rlatency'  or sheet_name=='wlatency'):
+          stats_sheets[sheet_name].write(row[sheet_name],col_num, float(data.strip('ms').strip()), num_format2)
+        else:
+          stats_sheets[sheet_name].write(row[sheet_name],col_num, int(data), num_format1)
+      except:
+        stats_sheets[sheet_name].write(row[sheet_name],col_num, data, d_format)
+
   row[sheet_name]+=1
 
 # collect targeted value in a log file
@@ -328,8 +387,8 @@ for argnum,arg in enumerate(sys.argv):
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Node','DC','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[18,14,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
-sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Node','P99','P98','95%','P75','P50','','Node','P99','P98','95%','P75','P50'],'widths':[18,5,5,5,5,5,3,18,5,5,5,5,5],'extra':0,'comment':'','tp_type':''})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[14,30,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
+sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Max','P99','P98','P95','P75','P50','Min','','Datacenter','Node','Max','P99','P98','P95','P75','P50','Min'],'widths':[20,20,10,10,10,10,10,10,10,3,20,20,10,10,10,10,10,10,10],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(tp_drm)+' dropped mutations (cfstats)','tp_type':'drm'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Sample Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':1,'comment':'','tp_type':'tblcnt'})
 sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Table with partiton sizes greater than '+str(tp_lpar)+' (cfstats)','tp_type':'lpar'})
@@ -364,7 +423,7 @@ comments = [
 'comment':["Data Size is a single set of complete data.  It does not include replicated data across the database"]
 },{
 'fields':['Read Requests'],
-'comment':["The number of read requests during the nodes uptime, analogous to client writes."]
+'comment':["The number of read requests during the nodes uptime, analogous to client reads."]
 },{
 'fields':['Write Requests'],
 'comment':["The number of write requests during the nodes uptime, analogous to client writes."]
@@ -395,9 +454,6 @@ comments = [
 },{
 'fields':['Write TPMo'],
 'comment':["The database's average write requests per month. The month is calculated at 365.25/12 days."]
-},{
-'fields':['Uptime (sec)','Uptime (day)'],
-'comment':["The combined uptime of all nodes in the database"]
 },{
 'fields':['Total R % RW'],
 'comment':["The total read requests percentage of combined RW requests (read and write) in the database. (See comment in READ TPS)"]
@@ -436,9 +492,11 @@ for database_url in data_url:
   table_totals = {}
   total_uptime = 0
   dc_array = []
-  database_gcpause = []
   node_dc = {}
   dc_list = []
+  exclude_tab = []
+  node_uptime = {}
+  database_gcpause = []
   dc_gcpause = {}
   node_gcpause = {}
   gc_data = {}
@@ -447,25 +505,67 @@ for database_url in data_url:
   newest_gc = {}
   oldest_gc = {}
   max_gc = {}
-  exclude_tab = []
-  node_uptime = {}
+  node_ip = {}
+  ip_node = {}
+  node_status_data = {}
+  row={}
+
   warnings = {'Astra Guardrails':{},'Database Health':{}}
 
   rootPath = database_url + '/nodes/'
 
+  # collect node info
+  if len(node_ip)==0:
+    for node in os.listdir(rootPath):
+      ckpath = rootPath + node + '/nodetool'
+      if path.isdir(ckpath):
+        statuspath = rootPath + node + '/nodetool/status'
+        if(path.exists(statuspath)):
+          statusFile = open(statuspath, 'r')
+          for line in statusFile:
+            if line.count('.')>=3:
+              ip_addr = line.split()[1]
+              if ip_addr==node:
+                node_ip[node]=ip_addr
+                next_ip=0
+              elif ip_addr==node.replace('_','.'):
+                node_ip[node]=ip_addr
+                next_ip=0
+              elif ip_addr==node.replace('-','.'):
+                node_ip[node]=ip_addr
+                next_ip=0
+
+    for node in os.listdir(rootPath):
+      statuspath = rootPath + node + '/nodetool/status'
+      if(path.exists(statuspath) and node not in node_ip):
+        find_ip_addr(node)
+    statusFile.close()
+
+  # the ip_node is created in case the directory name (or node) is not the ip address
+  # this is specifically used for adding the node uptime on the node tab
+  for node_name,ip_name in list(node_ip.items()):
+    ip_node[ip_name]=node_name
+
   # collect dc info
   for node in os.listdir(rootPath):
-    ckpath = rootPath + node + '/nodetool'
-    if path.isdir(ckpath):
-      statuspath = rootPath + node + '/nodetool/status'
-      get_dc(statuspath)
+    if node in node_ip:
+      ckpath = rootPath + node + '/nodetool'
+      if path.isdir(ckpath):
+        statuspath = rootPath + node + '/nodetool/status'
+        get_dc(rootPath,statuspath,node)
+        if database_name == '':
+          databasepath = rootPath + node + '/nodetool/describecluster'
+          database_name = get_param(databasepath,'Name:',1)
+          newest_gc[database_name]={'jd':0.0,'dt':''}
+          oldest_gc[database_name]={'jd':99999999999.9,'dt':''}
+          max_gc[database_name]=''
 
-    schemapath = rootPath + node + '/driver'
-    if path.isdir(schemapath):
-      try:
-        schemaFile = open(schemapath + '/schema', 'r')
-      except:
-        exit('Error: No schema file - ' + schemapath + '/schema')
+      schemapath = rootPath + node + '/driver'
+      if path.isdir(schemapath):
+        try:
+          schemaFile = open(schemapath + '/schema', 'r')
+        except:
+          exit('Error: No schema file - ' + schemapath + '/schema')
 
   # collect and analyze schema
   ks = ''
@@ -474,256 +574,254 @@ for database_url in data_url:
   is_nodes=0
   
   for node in os.listdir(rootPath):
-    if (prev_node==''):
-      if (ks==''):
-        ckpath = rootPath + node + '/nodetool'
-        if path.isdir(ckpath):
-          is_nodes=1
-          prev_node=node
-          ks = ''
-          tbl = ''
-          create_stmt = {}
-          tbl_data = {}
-          for line in schemaFile:
-            line = line.strip('\n').strip()
-            if (line==''): tbl=''
-            if("CREATE KEYSPACE" in line):
-              cur_rf = 0
-              prev_ks = ks
-              ks = line.split()[2].strip('"')
-              tbl_data[ks] = {'cql':line,'rf':0}
-              rf=0;
+    if node in node_ip:
+      if (prev_node==''):
+        if (ks==''):
+          ckpath = rootPath + node + '/nodetool'
+          if path.isdir(ckpath):
+            is_nodes=1
+            prev_node=node
+            ks = ''
+            tbl = ''
+            create_stmt = {}
+            tbl_data = {}
+            for line in schemaFile:
+              line = line.strip('\n').strip()
+              if (line==''): tbl=''
+              if("CREATE KEYSPACE" in line):
+                cur_rf = 0
+                prev_ks = ks
+                ks = line.split()[2].strip('"')
+                tbl_data[ks] = {'cql':line,'rf':0}
+                rf=0;
+                if ks not in dni_keyspace:
+                  for dc_name in dc_array:
+                    if ("'"+dc_name+"':" in line):
+                      i=0
+                      for prt in line.split():
+                        prt_chk = "'"+dc_name+"':"
+                        if (prt==prt_chk):
+                          rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                          try:
+                            type(dc_ks_rf[dc_name])
+                          except:
+                            dc_ks_rf[dc_name] = {}
+                          try:
+                            type(dc_ks_rf[dc_name][ks])
+                          except:
+                            dc_ks_rf[dc_name][ks] = rf
+                          tbl_data[ks]['rf']+=float(rf)
+                        i+=1
+                    elif("'replication_factor':" in line):
+                      i=0
+                      for prt in line.split():
+                        prt_chk = "'replication_factor':"
+                        if (prt==prt_chk):
+                          rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                          try:
+                            type(dc_ks_rf[dc_name])
+                          except:
+                            dc_ks_rf[dc_name] = {}
+                          try:
+                            type(dc_ks_rf[dc_name][ks])
+                          except:
+                            dc_ks_rf[dc_name][ks] = rf
+                          tbl_data[ks]['rf']+=float(rf)
+                        i+=1
+                    else:tbl_data[ks]['rf']=float(1)
               if ks not in dni_keyspace:
-                for dc_name in dc_array:
-                  if ("'"+dc_name+"':" in line):
-                    i=0
-                    for prt in line.split():
-                      prt_chk = "'"+dc_name+"':"
-                      if (prt==prt_chk):
-                        rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                        try:
-                          type(dc_ks_rf[dc_name])
-                        except:
-                          dc_ks_rf[dc_name] = {}
-                        try:
-                          type(dc_ks_rf[dc_name][ks])
-                        except:
-                          dc_ks_rf[dc_name][ks] = rf
-                        tbl_data[ks]['rf']+=float(rf)
-                      i+=1
-                  elif("'replication_factor':" in line):
-                    i=0
-                    for prt in line.split():
-                      prt_chk = "'replication_factor':"
-                      if (prt==prt_chk):
-                        rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                        try:
-                          type(dc_ks_rf[dc_name])
-                        except:
-                          dc_ks_rf[dc_name] = {}
-                        try:
-                          type(dc_ks_rf[dc_name][ks])
-                        except:
-                          dc_ks_rf[dc_name][ks] = rf
-                        tbl_data[ks]['rf']+=float(rf)
-                      i+=1
-                  else:tbl_data[ks]['rf']=float(1)
-            if ks not in dni_keyspace:
-              if('CREATE INDEX' in line):
-                prev_tbl = tbl
-                tbl = line.split()[2].strip('"')
-                tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
-                src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-                src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-                add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
-                tbl=''
-              elif('CREATE CUSTOM INDEX' in line):
-                prev_tbl = tbl
-                tbl = line.split()[3].strip('"')
-                tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
-                src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-                src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-                add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
-                tbl=''
-              elif('CREATE TYPE' in line):
-                prev_tbl = tbl
-                tbl_line = line.split()[2].strip('"')
-                tbl = tbl_line.split('.')[1].strip().strip('"')
-                tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
-                tbl_data[ks][tbl]['field'] = {}
-              elif('CREATE AGGREGATE' in line):
-                prev_tbl = tbl
-                if 'IF NOT EXISTS' in line:
+                if('CREATE INDEX' in line):
+                  prev_tbl = tbl
                   tbl = line.split()[2].strip('"')
-                else:
-                  tbl = line.split()[5].strip('"')
-                tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
-                tbl_data[ks][tbl]['field'] = {}
-                try:
-                  warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
-                except:
-                  warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
-              elif('CREATE OR REPLACE FUNCTION' in line):
-                prev_tbl = tbl
-                tbl = line.split()[4].strip('"')
-                tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
-                tbl_data[ks][tbl]['field'] = {}
-                try:
-                  warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
-                except:
-                  warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
-              elif('CREATE TABLE' in line):
-                prev_tbl = tbl
-                tbl_line = line.split()[2].strip('"')
-                tbl = tbl_line.split('.')[1].strip().strip('"')
-                tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
-                tbl_data[ks][tbl]['field'] = {}
-              elif('CREATE MATERIALIZED VIEW' in line ):
-                prev_tbl = tbl
-                tbl_line = line.split()[3].strip('"')
-                tbl = tbl_line.split('.')[1].strip().strip('"')
-                tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
-                tbl_data[ks][tbl]['field'] = {}
-              if (tbl !=''):
-                if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
-                  src_ks = line.split('.')[0].split()[1].strip('"')
-                  src_tbl = line.split('.')[1].strip('"')
-                  add_tp_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
-                elif('PRIMARY KEY' in line):
-                  if(line.count('(') == 1):
-                    tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
-                    tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
-                    del tbl_data[ks][tbl]['cc'][0]
-                  elif(line.count('(') == 2):
-                    tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
-                    tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
-                  tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
-                elif line.strip() != ');':
+                  tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
+                  src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                  src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                  add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
+                  tbl=''
+                elif('CREATE CUSTOM INDEX' in line):
+                  prev_tbl = tbl
+                  tbl = line.split()[3].strip('"')
+                  tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
+                  src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                  src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                  add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
+                  tbl=''
+                elif('CREATE TYPE' in line):
+                  prev_tbl = tbl
+                  tbl_line = line.split()[2].strip('"')
+                  tbl = tbl_line.split('.')[1].strip().strip('"')
+                  tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
+                  tbl_data[ks][tbl]['field'] = {}
+                elif('CREATE AGGREGATE' in line):
+                  prev_tbl = tbl
+                  if 'IF NOT EXISTS' in line:
+                    tbl = line.split()[2].strip('"')
+                  else:
+                    tbl = line.split()[5].strip('"')
+                  tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
+                  tbl_data[ks][tbl]['field'] = {}
                   try:
-                    tbl_data[ks][tbl]['cql'] += ' ' + line
-                    if('AND ' not in line and ' WITH ' not in line):
-                      fld_name = line.split()[0]
-                      fld_type = line.split()[1].strip(',')
-                      if (fld_name!='CREATE'):
-                        tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                    warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
                   except:
-                    print(('Error1:' + ks + '.' + tbl + ' - ' + line))
+                    warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
+                elif('CREATE OR REPLACE FUNCTION' in line):
+                  prev_tbl = tbl
+                  tbl = line.split()[4].strip('"')
+                  tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
+                  tbl_data[ks][tbl]['field'] = {}
+                  try:
+                    warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
+                  except:
+                    warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
+                elif('CREATE TABLE' in line):
+                  prev_tbl = tbl
+                  tbl_line = line.split()[2].strip('"')
+                  tbl = tbl_line.split('.')[1].strip().strip('"')
+                  tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
+                  tbl_data[ks][tbl]['field'] = {}
+                elif('CREATE MATERIALIZED VIEW' in line ):
+                  prev_tbl = tbl
+                  tbl_line = line.split()[3].strip('"')
+                  tbl = tbl_line.split('.')[1].strip().strip('"')
+                  tbl_data[ks][tbl] = {'type':'Materialized View', 'cql':line}
+                  tbl_data[ks][tbl]['field'] = {}
+                if (tbl !=''):
+                  if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized View'):
+                    src_ks = line.split('.')[0].split()[1].strip('"')
+                    src_tbl = line.split('.')[1].strip('"')
+                    add_tp_tbl('Materialized View(s)s',ks,tbl,src_ks,src_tbl)
+                  elif('PRIMARY KEY' in line):
+                    if(line.count('(') == 1):
+                      tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
+                      tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
+                      del tbl_data[ks][tbl]['cc'][0]
+                    elif(line.count('(') == 2):
+                      tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
+                      tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
+                    tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
+                  elif line.strip() != ');':
+                    try:
+                      tbl_data[ks][tbl]['cql'] += ' ' + line
+                      if('AND ' not in line and ' WITH ' not in line):
+                        fld_name = line.split()[0]
+                        fld_type = line.split()[1].strip(',')
+                        if (fld_name!='CREATE'):
+                          tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                    except:
+                      print(('Error1:' + ks + '.' + tbl + ' - ' + line))
   if (is_nodes==0):
     exit('No Node Info')
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
   for node in os.listdir(rootPath):
-    ckpath = rootPath + node + '/nodetool'
-    if path.isdir(ckpath):
-      # initialize node variables
-      iodata = {}
-      iodata[node] = {}
-      keyspace = ''
-      table = ''
-      dc = ''
-      cfstat = rootPath + node + '/nodetool/cfstats'
-      tablestat = rootPath + node + '/nodetool/tablestats'
-      databasepath = rootPath + node + '/nodetool/describecluster'
-      infopath = rootPath + node + '/nodetool/info'
+    if node in node_ip:
+      ckpath = rootPath + node + '/nodetool'
+      if path.isdir(ckpath):
+        # initialize node variables
+        iodata = {}
+        iodata[node] = {}
+        keyspace = ''
+        table = ''
+        dc = ''
+        cfstat = rootPath + node + '/nodetool/cfstats'
+        tablestat = rootPath + node + '/nodetool/tablestats'
+        databasepath = rootPath + node + '/nodetool/describecluster'
+        infopath = rootPath + node + '/nodetool/info'
 
-      #collect database name
-      if (database_name == ''):
-        database_name = get_param(databasepath,'Name:',1)
+        # collect and analyze uptime and R/W counts from cfstats
+        try:
+          cfstatFile = open(cfstat, 'r')
+        except:
+          cfstatFile = open(tablestat, 'r')
+        node_uptime[node] = int(get_param(infopath,'Uptime',3))
+        total_uptime = total_uptime + node_uptime[node]
 
-      # collect and analyze uptime and R/W counts from cfstats
-      try:
-        cfstatFile = open(cfstat, 'r')
-      except:
-        cfstatFile = open(tablestat, 'r')
-      node_uptime[node] = int(get_param(infopath,'Uptime',3))
-      total_uptime = total_uptime + node_uptime[node]
-
-      ks = ''
-      tbl = ''
-      ks_type=''
-      for line in cfstatFile:
-        line = line.strip('\n').strip()
-        if (line==''): tbl = ''
-        else:
-          if 'Keyspace' in line:
-            ks = line.split(':')[1].strip()
-          if ks!='' and ks not in dni_keyspace:
-            try:
-              type(table_tps[ks])
-            except:
-              table_tps[ks]={}
-            if('Table: ' in line):
-              tbl = line.split(':')[1].strip()
-              is_index = 0
-            elif('Table (index): ' in line):
-              tbl = line.split(':')[1].strip()
-              is_index = 1
-            if(tbl!=''):
+        ks = ''
+        tbl = ''
+        ks_type=''
+        for line in cfstatFile:
+          line = line.strip('\n').strip()
+          if (line==''): tbl = ''
+          else:
+            if 'Keyspace' in line:
+              ks = line.split(':')[1].strip()
+            if ks!='' and ks not in dni_keyspace:
               try:
-                type(table_tps[ks][tbl])
+                type(table_tps[ks])
               except:
-                table_tps[ks][tbl]={'write':0,'read':0}
-              if ('Space used (live):' in line):
+                table_tps[ks]={}
+              if('Table: ' in line):
+                tbl = line.split(':')[1].strip()
+                is_index = 0
+              elif('Table (index): ' in line):
+                tbl = line.split(':')[1].strip()
+                is_index = 1
+              if(tbl!=''):
                 try:
-                  tsize = float(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                  type(table_tps[ks][tbl])
                 except:
-                  tsize = float(line.split(':')[1].strip())
-                if (tsize):
-                  total_size += tsize
-                  # astra pricing will be based on data on one set of data
-                  # divide the total size by the total rf (gives the size per node)
+                  table_tps[ks][tbl]={'write':0,'read':0}
+                if ('Space used (live):' in line):
                   try:
-                    type(tbl_data[ks])
+                    tsize = float(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
                   except:
-                    tbl_data[ks] = {}
-                    tbl_data[ks]['rf'] = float(1)
+                    tsize = float(line.split(':')[1].strip())
+                  if (tsize):
+                    total_size += tsize
+                    # astra pricing will be based on data on one set of data
+                    # divide the total size by the total rf (gives the size per node)
+                    try:
+                      type(tbl_data[ks])
+                    except:
+                      tbl_data[ks] = {}
+                      tbl_data[ks]['rf'] = float(1)
+                    try:
+                      type(size_table[ks])
+                    except:
+                      size_table[ks] = {}
+                    try:
+                      type(size_table[ks][tbl])
+                      size_table[ks][tbl] += tsize
+                    except:
+                      size_table[ks][tbl] = tsize
+                elif('Local read count: ' in line):
                   try:
-                    type(size_table[ks])
+                    count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
                   except:
-                    size_table[ks] = {}
+                    count = int(line.split(':')[1].strip())
+                  if (count > 0):
+                    total_reads += count
+                    table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
+                    try:
+                      type(read_table[ks])
+                    except:
+                      read_table[ks] = {}
+                    try:
+                      type(read_table[ks][tbl])
+                      read_table[ks][tbl] += count
+                    except:
+                      read_table[ks][tbl] = count
+                if('Local write count: ' in line):
                   try:
-                    type(size_table[ks][tbl])
-                    size_table[ks][tbl] += tsize
+                    count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
                   except:
-                    size_table[ks][tbl] = tsize
-              elif('Local read count: ' in line):
-                try:
-                  count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
-                except:
-                  count = int(line.split(':')[1].strip())
-                if (count > 0):
-                  total_reads += count
-                  table_tps[ks][tbl]['read'] += float(count) / float(node_uptime[node])
-                  try:
-                    type(read_table[ks])
-                  except:
-                    read_table[ks] = {}
-                  try:
-                    type(read_table[ks][tbl])
-                    read_table[ks][tbl] += count
-                  except:
-                    read_table[ks][tbl] = count
-              if('Local write count: ' in line):
-                try:
-                  count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
-                except:
-                  count = int(line.split(':')[1].strip())
-                if (count > 0):
-                  table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
-                  try:
-                    total_writes += count
-                  except:
-                    total_writes = count
-                  try:
-                    type(write_table[ks])
-                  except:
-                    write_table[ks] = {}
-                  try:
-                    type(write_table[ks][tbl])
-                    write_table[ks][tbl] += count
-                  except:
-                    write_table[ks][tbl] = count
+                    count = int(line.split(':')[1].strip())
+                  if (count > 0):
+                    table_tps[ks][tbl]['write'] += float(count) / float(node_uptime[node])
+                    try:
+                      total_writes += count
+                    except:
+                      total_writes = count
+                    try:
+                      type(write_table[ks])
+                    except:
+                      write_table[ks] = {}
+                    try:
+                      type(write_table[ks][tbl])
+                      write_table[ks][tbl] += count
+                    except:
+                      write_table[ks][tbl] = count
 
 
   # total up R/W across all nodes
@@ -747,62 +845,47 @@ for database_url in data_url:
   write_count.sort(reverse=True,key=sortFunc)
   table_count.sort(reverse=True,key=sortFunc)
   total_rw = total_reads+total_writes
-  
-
-  #initialize GC variables
-  database_gcpause = []
-  node_dc = {}
-  dc_list = []
-  dc_gcpause = {}
-  node_gcpause = {}
-  gc_data = {}
-  gc_dt = []
-  wname = 'gc_data'
-  newest_gc = {}
-  oldest_gc = {}
-  max_gc = {}
-  
+    
   # collect GC Data
   rootPath = database_url + '/nodes/'
   for node in os.listdir(rootPath):
-    systemlogpath = rootPath + node + '/logs/cassandra/'
-    systemlog = systemlogpath + 'system.log'
-    jsppath1 = rootPath + node + '/java_system_properties.json'
-    jsppath2 = rootPath + node + '/java_system_properties.txt'
-    infopath = rootPath + node + '/nodetool/info'
-    if(path.exists(systemlog)):
-      statuspath = rootPath + node + '/nodetool/status'
-      if(len(node_dc)==0):
-        get_dc(statuspath)
-        newest_gc[database_name]={'jd':0.0,'dt':''}
-        oldest_gc[database_name]={'jd':99999999999.9,'dt':''}
-        max_gc[database_name]=''
-      node_gcpause[node] = []
-      newest_gc[node]={'jd':0.0,'dt':''}
-      oldest_gc[node]={'jd':99999999999.9,'dt':''}
-      max_gc[node]=''
-      tz[node]='UTC'
-      
-      for logfile in os.listdir(systemlogpath):
-        if(logfile.split('.')[0] == 'system'):
-          systemlog = systemlogpath + logfile
-          cor_node = node.replace('-','.')
-          parseGC(cor_node,systemlog,systemlogpath)
-
+    if node in node_ip:
+      systemlogpath = rootPath + node + '/logs/cassandra/'
+      systemlog = systemlogpath + 'system.log'
+      jsppath1 = rootPath + node + '/java_system_properties.json'
+      jsppath2 = rootPath + node + '/java_system_properties.txt'
+      infopath = rootPath + node + '/nodetool/info'
+      if(path.exists(systemlog)):
+        statuspath = rootPath + node + '/nodetool/status'
+        node_gcpause[node] = []
+        newest_gc[node]={'jd':0.0,'dt':''}
+        oldest_gc[node]={'jd':99999999999.9,'dt':''}
+        max_gc[node]=''
+        tz[node]='UTC'
+        
+  #      for logfile in os.listdir(systemlogpath):
+  #        if(logfile.split('.')[0] == 'system'):
+  #          systemlog = systemlogpath + logfile
+  #          parseGC(node,systemlog,systemlogpath)
+        for logfile in os.listdir(systemlogpath):
+          if(logfile.split('.')[0] == 'system'):
+            systemlog = systemlogpath + '/' + logfile
+            parseGC(node,systemlog,systemlogpath)
 
   # collect GC data from additional log path
   addlogs = './AdditionalLogs'
   if(path.exists(addlogs)):
     for node in os.listdir(addlogs):
-      dirpath = 'AdditionalLogs/' + node
-      if(node.split('-')[0]=='10'):
-        logdir = 'AdditionalLogs/' + node + '/var/log/cassandra'
-        for logfile in os.listdir(logdir):
-          if(logfile.split('.')[0] == 'system'):
-            systemlogpath = logdir + '/'
-            systemlog = systemlogpath + '/' + logfile
-            cor_node = node.replace('-','.')
-            parseGC(cor_node,systemlog,systemlogpath)
+      if node in node_ip:
+        dirpath = 'AdditionalLogs/' + node
+        if(node.split('-')[0]=='10'):
+          logdir = 'AdditionalLogs/' + node + '/var/log/cassandra'
+          for logfile in os.listdir(logdir):
+            if(logfile.split('.')[0] == 'system'):
+              systemlogpath = logdir + '/'
+              systemlog = systemlogpath + '/' + logfile
+              cor_node = node.replace('-','.')
+              parseGC(cor_node,systemlog,systemlogpath)
 
   #collect database GC Percents
   get_gc_data('Database',database_name,database_gcpause,0)
@@ -1087,7 +1170,6 @@ for database_url in data_url:
     ds_worksheet.set_column(column,column,col_width)
     column+=1
 
-
   column=0
   for header in ds_headers:
       if header == '':
@@ -1097,31 +1179,27 @@ for database_url in data_url:
         write_cmt(ds_worksheet,chr(ord('@')+column+1)+'2',header)
       column+=1
 
-  row = 2
+  row_num = 2
   perc_reads = 0.0
   column = 0
   total_t_size = 0
   total_set_size = 0.0
   total_row = {'read':0,'write':0,'size':0,'node':0}
-  database_name = ''
   prev_nodes = []
   stat_sheets = {}
   headers = {}
   col_widths = {}
   sheets_record = {}
-  row = {}
   node_status = 1
   proxyhistData = {}
   lpar_gr_array=[]
   lpar_tp_array=[]
+  sheet_header = 0
 
   for node in os.listdir(rootPath):
-    ckpath = rootPath + node + '/nodetool'
-    if(path.isdir(ckpath)):
-      if database_name == '':
-        databasepath = rootPath + node + '/nodetool/describecluster'
-        database_name = get_param(databasepath,'Name:',1)
-
+    if node in node_ip:
+      ckpath = rootPath + node + '/nodetool'
+      if(path.isdir(ckpath)):
         for sheet_array in sheets_data:
           if (sheet_array['sheet_name'] not in exclude_tab):
             headers[sheet_array['sheet_name']] = sheet_array['headers']
@@ -1129,9 +1207,12 @@ for database_url in data_url:
             sheets_record[sheet_array['sheet_name']]={}
 
         for sheet_name,sheet_obj in list(stats_sheets.items()):
-          if (sheet_name == 'ph'):
-            sheet_obj.merge_range('A1:F1','Coordinating Node Read Latency',title_format3)
-            sheet_obj.merge_range('H1:M1','Coordinating Node Write Latency',title_format3)
+          if sheet_name == 'ph' and sheet_header==0:
+            sheet_header=1
+            sheet_obj.merge_range('A1:I1','Coordinating Node Read Latency (ms)',title_format3)
+            sheet_obj.merge_range('K1:S1','Coordinating Node Write Latency (ms)',title_format3)
+            row[sheet_name]=1
+          elif sheet_name == 'ph':
             row[sheet_name]=1
           else:
             row[sheet_name]=0
@@ -1142,142 +1223,155 @@ for database_url in data_url:
             sheet_obj.set_column(col_num,col_num,col_width)
           row[sheet_name]+=1
 
-      # collect dc name
-      dc = ''
-      info = rootPath + node + '/nodetool/info'
-      infoFile = open(info, 'r')
-      for line in infoFile:
-        if('Data Center' in line):
-          dc = line.split(':')[1].strip()
+        # collect dc name
+        dc = ''
+        info = rootPath + node + '/nodetool/info'
+        infoFile = open(info, 'r')
+        for line in infoFile:
+          if('Data Center' in line):
+            dc = line.split(':')[1].strip()
+            try:
+              type(proxyhistData[dc])
+            except:
+              proxyhistData[dc]={}
 
-      # collect node data
-      if(node_status):
-        status = rootPath + node + '/nodetool/status'
-        statusFile = open(status, 'r')
-        ro=1
-        for line in statusFile:
-          if('Datacenter:' in line):
-            dc_name = line.split(':')[1].strip()
-          elif(line.count('.')>=3):
-            ro+=1
-            values = line.split();
-            row_data = [values[1],dc_name,values[2] + ' ' + values[3],values[4],values[7]]
-            write_row('node',row_data,data_format)
-            stats_sheets['node'].write(ro-1,5,float(node_uptime[values[1]]),total_format2)
-            stats_sheets['node'].write_formula('G'+str(ro),'=INT(F'+str(ro)+'/86400) & " days " & TEXT((F'+str(ro)+'/86400)-INT(F'+str(ro)+'/86400),"hh:mm:ss")',data_format3)
-            node_status=0
-        stats_sheets['node'].write(ro,4,'Avg Uptime',title_format)
-        total_row['node'] = ro
-        stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
-        stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
-      # collect data from the cfstats log file
-      ks = ''
-      tbl = ''
-      cfstat = rootPath + node + '/nodetool/cfstats'
-      cfstatFile = open(cfstat, 'r')
-      for line in cfstatFile:
-        if('Keyspace' in line):
-          ks = line.split(':')[1].strip()
-        elif('Table: ' in line and ks not in system_keyspace):
-          tbl = line.split(':')[1].strip()
-        elif(':' in line and ks not in system_keyspace):
-          header = line.split(':')[0].strip()
-          value = line.split(':')[1].strip()
-          row_data = [node,dc,ks,tbl,header,value]
-          for sheet_array in sheets_data:
-            if (sheet_array['sheet_name'] not in exclude_tab):
-              if(sheet_array['cfstat_filter'] and sheet_array['cfstat_filter'] in line):
-                value = line.split(':')[1].strip()
-                row_data = [node,dc,ks,tbl,value]
-                if (sheet_array['filter_type']):
-                  value = value.strip(sheet_array['strip'])
-                  if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
-                    if sheet_array['sheet_name']=='numTables' or sheet_array['sheet_name']=='partition':
-                      try:
-                        type(warnings['Astra Guardrails'][sheet_array['tab_name']])
-                      except:
-                        warnings['Astra Guardrails'][sheet_array['tab_name']]=[]
-                      if(sheet_array['sheet_name']=='numTables' and len(warnings['Astra Guardrails'][sheet_array['tab_name']])==0):
-                        if (float(value)>=gr_tblcnt):
-                          warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database***')
-                        else:
-                          warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database')
-                      elif sheet_array['sheet_name']=='partition':
-                        table_data = dc+ks+tbl
-                        if float(value)>=gr_lpar*1000000:
-                          if table_data not in lpar_gr_array:
-                            lpar_gr_array.append(table_data)
-                            warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB***')
-                        elif table_data not in lpar_tp_array:
-                          lpar_tp_array.append(table_data)
-                          warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB')
-                        row_data[4] = str(int(value)/1000000)
-                    else:
-                      warnings['Database Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
-                        
-                    if(sheet_array['extra']):
-                      sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
-                      row[sheet_array['sheet_name']]+=1
-                    else:
-                      write_row(sheet_array['sheet_name'],row_data,data_format)
+        # collect data from the cfstats log file
+        ks = ''
+        tbl = ''
+        cfstat = rootPath + node + '/nodetool/cfstats'
+        cfstatFile = open(cfstat, 'r')
+        for line in cfstatFile:
+          if('Keyspace' in line):
+            ks = line.split(':')[1].strip()
+          elif('Table: ' in line and ks not in system_keyspace):
+            tbl = line.split(':')[1].strip()
+          elif(':' in line and ks not in system_keyspace):
+            header = line.split(':')[0].strip()
+            value = line.split(':')[1].strip()
+            row_data = [node,dc,ks,tbl,header,value]
+            for sheet_array in sheets_data:
+              if (sheet_array['sheet_name'] not in exclude_tab):
+                if(sheet_array['cfstat_filter'] and sheet_array['cfstat_filter'] in line):
+                  value = line.split(':')[1].strip()
+                  row_data = [node,dc,ks,tbl,value]
+                  if (sheet_array['filter_type']):
+                    value = value.strip(sheet_array['strip'])
+                    if (sheet_array['filter_type']=='>=' and float(value)>=float(sheet_array['filter'])):
+                      if sheet_array['sheet_name']=='numTables' or sheet_array['sheet_name']=='partition':
+                        try:
+                          type(warnings['Astra Guardrails'][sheet_array['tab_name']])
+                        except:
+                          warnings['Astra Guardrails'][sheet_array['tab_name']]=[]
+                        if(sheet_array['sheet_name']=='numTables' and len(warnings['Astra Guardrails'][sheet_array['tab_name']])==0):
+                          if (float(value)>=gr_tblcnt):
+                            warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database***')
+                          else:
+                            warnings['Astra Guardrails'][sheet_array['tab_name']].append(str(value) + ' tables in database')
+                        elif sheet_array['sheet_name']=='partition':
+                          table_data = dc+ks+tbl
+                          if float(value)>=gr_lpar*1000000:
+                            if table_data not in lpar_gr_array:
+                              lpar_gr_array.append(table_data)
+                              warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB***')
+                          elif table_data not in lpar_tp_array:
+                            lpar_tp_array.append(table_data)
+                            warnings['Astra Guardrails'][sheet_array['tab_name']].append('Table '+dc+'.'+ks+'.'+tbl+' partition size '+str(int(value)/1000000)+ 'MB')
+                          row_data[4] = str(int(value)/1000000)
+                      else:
+                        warnings['Database Health'][sheet_array['tab_name']]=[sheet_array['tab_name'] + ' greater than '+str(sheet_array['filter'])]
+                          
+                      if(sheet_array['extra']):
+                        sheets_record[sheet_array['sheet_name']][row[sheet_array['sheet_name']]] = row_data
+                        row[sheet_array['sheet_name']]+=1
+                      else:
+                        write_row(sheet_array['sheet_name'],row_data,data_format)
 
+                  else:
+                    write_row(sheet_array['sheet_name'],row_data,data_format)
+
+        # organize key data
+        key_record = {}
+        key_data = {}
+        for sheet_array in sheets_data:
+          if (sheet_array['sheet_name'] not in exclude_tab):
+            if(sheet_array['extra']):
+              row[sheet_array['sheet_name']]=1
+              for record_num,record in list(sheets_record[sheet_array['sheet_name']].items()):
+                new_key = sheet_array['sheet_name']+'_'+record[2]+'_'+record[3]
+                if hasattr(key_record,new_key) :
+                  if(key_record[new_key] < record[4]):
+                    key_record[new_key] = record[4]
+                    key_data[new_key] = record
                 else:
-                  write_row(sheet_array['sheet_name'],row_data,data_format)
-
-      # organize key data
-      key_record = {}
-      key_data = {}
-      for sheet_array in sheets_data:
-        if (sheet_array['sheet_name'] not in exclude_tab):
-          if(sheet_array['extra']):
-            row[sheet_array['sheet_name']]=1
-            for record_num,record in list(sheets_record[sheet_array['sheet_name']].items()):
-              new_key = sheet_array['sheet_name']+'_'+record[2]+'_'+record[3]
-              if hasattr(key_record,new_key) :
-                if(key_record[new_key] < record[4]):
                   key_record[new_key] = record[4]
                   key_data[new_key] = record
-              else:
-                key_record[new_key] = record[4]
-                key_data[new_key] = record
 
-      # collect node R/W latency data - coordinator level latencies
-      proxyhistData[node] = []
-      proxyhist = rootPath + node + '/nodetool/proxyhistograms'
-      proxyhistFile = open(proxyhist, 'r')
-      proxyhistData[node] = {'99%':[],'98%':[],'95%':[],'75%':[],'50%':[]}
-      for line in proxyhistFile:
-        if('Datacenter:' in line):
-          datacenter = line.split(':')[1].strip()
-        elif('Percentile' in line and header==''):
-          test = line.split();
-        elif('%' in line):
-          values = line.split();
-          readlat = float(values[1])/1000
-          writelat = float(values[2])/1000
-          row_data = [node,dc,values[0],readlat,writelat]
-          proxyhistData[node][values[0]].append([readlat,writelat])
-                  
-      for row_key in key_record:
-        write_row(row_key.split('_')[0],key_data[row_key],data_format)
-      
-      for nodeid,ph_datarow in list(proxyhistData.items()):
-        if nodeid not in prev_nodes:
-          row_data = [nodeid,round(ph_datarow['99%'][0][0],2),round(ph_datarow['98%'][0][0],2),round(ph_datarow['95%'][0][0],2),round(ph_datarow['75%'][0][0],2),round(ph_datarow['50%'][0][0],2),'',nodeid,round(ph_datarow['99%'][0][1],2),round(ph_datarow['98%'][0][1],2),round(ph_datarow['95%'][0][1],2),round(ph_datarow['75%'][0][1],2),round(ph_datarow['50%'][0][1],2)]
-          write_row('ph',row_data,data_format,[6])
-          prev_nodes.append(nodeid)
+        # collect node R/W latency data - coordinator level latencies
+        proxyhist = rootPath + node + '/nodetool/proxyhistograms'
+        proxyhistFile = open(proxyhist, 'r')
+        proxyhistData[dc][node] = {'Max':{},'99%':{},'98%':{},'95%':{},'75%':{},'50%':{},'Min':{}}
+        for line in proxyhistFile:
+          if('%' in line or 'Min' in line or 'Max' in line):
+            values = line.split();
+            proxyhistData[dc][node][values[0]]['R']=float(values[1])/1000
+            proxyhistData[dc][node][values[0]]['W']=float(values[2])/1000
+        
+        for row_key in key_record:
+          write_row(row_key.split('_')[0],key_data[row_key],data_format)
 
+  # Proxyhistogram tab
+  for dc,node_ph_array in list(proxyhistData.items()):
+    for node,proxyhist_array in list(node_ph_array.items()):
+      if node in node_ip:
+        row_data = [
+          dc,
+          node,
+          proxyhist_array['Max']['R'],
+          proxyhist_array['99%']['R'],
+          proxyhist_array['98%']['R'],
+          proxyhist_array['95%']['R'],
+          proxyhist_array['75%']['R'],
+          proxyhist_array['50%']['R'],
+          proxyhist_array['Min']['R'],
+          '',
+          dc,
+          node,
+          proxyhist_array['Max']['W'],
+          proxyhist_array['99%']['W'],
+          proxyhist_array['98%']['W'],
+          proxyhist_array['95%']['W'],
+          proxyhist_array['75%']['W'],
+          proxyhist_array['50%']['W'],
+          proxyhist_array['Min']['W'],
+        ]
+        write_row('ph',row_data,data_format,[9])
+
+  # Node data tab
+  ro=0
+  for dc,node_status_array in list(node_status_data.items()):
+    for node,status_array in list(node_status_array.items()):
+      if node in node_ip:
+        row_data = [dc,node,status_array['Load'],status_array['Tokens'],status_array['Rack']]
+        write_row('node',row_data,data_format)
+        ro = row['node']
+        stats_sheets['node'].write(ro-1,5,node_uptime[node],total_format2)
+        stats_sheets['node'].write_formula('G'+str(ro),'=INT(F'+str(ro)+'/86400) & " days " & TEXT((F'+str(ro)+'/86400)-INT(F'+str(ro)+'/86400),"hh:mm:ss")',data_format3)
+  stats_sheets['node'].write('E'+str(ro+1),'Avg Uptime',title_format)
+  stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
+  stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
+  total_row['node'] = ro+1
+  
   # create GC Pause tab
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
   gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
   gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
 
   prev_dc=0
-  row=0
+  row_num=0
   column=0
   for header in gc_headers:
-    gc_worksheet.write(row,column,header,title_format)
-    write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),header)
+    gc_worksheet.write(row_num,column,header,title_format)
+    write_cmt(worksheet,chr(ord('@')+column+1)+str(row_num+1),header)
     column+=1
 
   for col_num,col_width in enumerate(gc_widths):
@@ -1286,18 +1380,21 @@ for database_url in data_url:
   column=0
   for name, gc_val in list(gc_data.items()):
     if(gc_val['Level']=='Database'):
-      row+=1
+      row_num+=1
       for field in gc_fields:
         if(field=='From'):
-          gc_worksheet.write(row,column,oldest_gc[name]['dt'],data_format)
+          gc_worksheet.write(row_num,column,oldest_gc[name]['dt'],data_format)
         elif(field=='To'):
-          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+          gc_worksheet.write(row_num,column,newest_gc[name]['dt'])
         elif(field=='max_gc'):
-          gc_worksheet.write(row,column,max_gc[name])
+          gc_worksheet.write(row_num,column,max_gc[name])
         else:
-          gc_worksheet.write(row,column,gc_val[field])
+          try:
+            gc_worksheet.write(row_num,column,int(gc_val[field]),num_format1)
+          except:
+            gc_worksheet.write(row_num,column,gc_val[field])
         column+=1
-      row+=1
+      row_num+=1
       column=0
 
   dc_count=0
@@ -1306,35 +1403,40 @@ for database_url in data_url:
       dc_count += 1
       for field in gc_fields:
         if(field=='From'):
-          gc_worksheet.write(row,column,oldest_gc[name]['dt'])
+          gc_worksheet.write(row_num,column,oldest_gc[name]['dt'])
         elif(field=='To'):
-          gc_worksheet.write(row,column,newest_gc[name]['dt'])
+          gc_worksheet.write(row_num,column,newest_gc[name]['dt'])
         elif(field=='max_gc'):
-          gc_worksheet.write(row,column,max_gc[name])
+          gc_worksheet.write(row_num,column,max_gc[name])
         elif(gc_val[field]):
-          gc_worksheet.write(row,column,gc_val[field])
+          try:
+            gc_worksheet.write(row_num,column,int(gc_val[field]),num_format1)
+          except:
+            gc_worksheet.write(row_num,column,gc_val[field])
         column+=1
-
-      row+=1
+      row_num+=1
       column=0
 
   for dc_name in dc_list:
     for name, gc_val in list(gc_data.items()):
-      node_ip = gc_val['Name']
-      if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip]):
+      node_ip_addr = gc_val['Name']
+      if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip_addr]):
         for field in gc_fields:
           if(field=='Level'):
-            gc_worksheet.write(row,column,node_dc[gc_val['Name']])
+            gc_worksheet.write(row_num,column,node_dc[gc_val['Name']],data_format)
           elif(field=='From'):
-            gc_worksheet.write(row,column,oldest_gc[name]['dt'])
+            gc_worksheet.write(row_num,column,oldest_gc[name]['dt'],data_format)
           elif(field=='To'):
-            gc_worksheet.write(row,column,newest_gc[name]['dt'])
+            gc_worksheet.write(row_num,column,newest_gc[name]['dt'],data_format)
           elif(field=='max_gc'):
-            gc_worksheet.write(row,column,max_gc[name])
+            gc_worksheet.write(row_num,column,max_gc[name],data_format)
           elif(gc_val[field]):
-            gc_worksheet.write(row,column,gc_val[field])
+            try:
+              gc_worksheet.write(row_num,column,int(gc_val[field]),num_format1)
+            except:
+              gc_worksheet.write(row_num,column,gc_val[field],data_format)
           column+=1
-        row+=1
+        row_num+=1
         column=0
   
   # create workload tab
@@ -1352,32 +1454,30 @@ for database_url in data_url:
 
   column=0
   for header in wl_headers:
-      if header == '':
-        worksheet.write(2,column,header)
-      else:
-        worksheet.write(2,column,header,header_format1)
-        write_cmt(worksheet,chr(ord('@')+column+1)+'3',header)
-      column+=1
+    if header == '':
+      worksheet.write(2,column,header)
+    else:
+      worksheet.write(2,column,header,header_format1)
+      write_cmt(worksheet,chr(ord('@')+column+1)+'3',header)
+    column+=1
 
-  row = 2
+  row_num = 2
   column = 0
- 
+
   for t_data in table_count:
     ks = t_data['keyspace']
     tbl = t_data['table']
     cnt = t_data['count']
-    ds_worksheet.write(row,column,ks,data_format)
-    ds_worksheet.write(row,column+1,tbl,data_format)
-    ds_worksheet.write(row,column+2,cnt,total_format1)
+    ds_worksheet.write(row_num,column,ks,data_format)
+    ds_worksheet.write(row_num,column+1,tbl,data_format)
+    ds_worksheet.write(row_num,column+2,cnt,total_format1)
+    row_num+=1
 
-    row+=1
+  total_row['size']=row_num
+  ds_worksheet.write(row_num,column,'Total',header_format4)
+  ds_worksheet.write(row_num,column+2,'=SUM(C3:C'+ str(row_num)+')',total_format1)
 
-  total_row['size']=row
-
-  ds_worksheet.write(row,column,'Total',header_format4)
-  ds_worksheet.write(row,column+2,'=SUM(C3:C'+ str(row)+')',total_format1)
-
-  row = 3
+  row_num = 3
   perc_reads = 0.0
   column = 0
 
@@ -1392,25 +1492,25 @@ for database_url in data_url:
       table_totals[ks] = {}
     table_totals[ks][tbl] = {'reads':cnt,'writes':'n/a'}
     read_subtotal += cnt
-    worksheet.write(row,column,ks,data_format)
-    worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt,total_format2)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['read'],tps_format1)
-    worksheet.write(row,column+4,float(cnt)/total_reads,perc_format)
-    worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
-    row+=1
+    worksheet.write(row_num,column,ks,data_format)
+    worksheet.write(row_num,column+1,tbl,data_format)
+    worksheet.write(row_num,column+2,cnt,total_format2)
+    worksheet.write(row_num,column+3,table_tps[ks][tbl]['read'],tps_format1)
+    worksheet.write(row_num,column+4,float(cnt)/total_reads,perc_format)
+    worksheet.write(row_num,column+5,float(cnt)/float(total_rw),perc_format)
+    row_num+=1
 
-  total_row['read']=row
+  total_row['read']=row_num
   
-  worksheet.write(row,column,'Total',header_format4)
-  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(C4:C'+ str(row)+')',total_format2)
-  worksheet.write(row,column+3,'=SUM(D4:D'+ str(row)+')',tps_format1)
-  worksheet.write(row,column+5,'=SUM(F4:F'+ str(row)+')',perc_format)
-  write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total R % RW')
+  worksheet.write(row_num,column,'Total',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row_num+1),'Total')
+  worksheet.write(row_num,column+2,'=SUM(C4:C'+ str(row_num)+')',total_format2)
+  worksheet.write(row_num,column+3,'=SUM(D4:D'+ str(row_num)+')',tps_format1)
+  worksheet.write(row_num,column+5,'=SUM(F4:F'+ str(row_num)+')',perc_format)
+  write_cmt(worksheet,chr(ord('@')+column+6)+str(row_num+1),'Total R % RW')
 
   perc_writes = 0.0
-  row = 3
+  row_num = 3
   column = 7
   astra_write_subtotal = 0
   for writes in write_count:
@@ -1426,67 +1526,67 @@ for database_url in data_url:
       table_totals[ks][tbl] = {'reads':table_totals[ks][tbl]['reads'],'writes':cnt}
     except:
       table_totals[ks][tbl] = {'reads':'n/a','writes':cnt}
-    worksheet.write(row,column,ks,data_format)
-    worksheet.write(row,column+1,tbl,data_format)
-    worksheet.write(row,column+2,cnt,total_format2)
-    worksheet.write(row,column+3,table_tps[ks][tbl]['write'],tps_format1)
-    worksheet.write(row,column+4,float(cnt)/total_writes,perc_format)
-    worksheet.write(row,column+5,float(cnt)/float(total_rw),perc_format)
-    row+=1
+    worksheet.write(row_num,column,ks,data_format)
+    worksheet.write(row_num,column+1,tbl,data_format)
+    worksheet.write(row_num,column+2,cnt,total_format2)
+    worksheet.write(row_num,column+3,table_tps[ks][tbl]['write'],tps_format1)
+    worksheet.write(row_num,column+4,float(cnt)/total_writes,perc_format)
+    worksheet.write(row_num,column+5,float(cnt)/float(total_rw),perc_format)
+    row_num+=1
 
-  total_row['write']=row
+  total_row['write']=row_num
 
-  worksheet.write(row,column,'Total',header_format4)
-  write_cmt(worksheet,chr(ord('@')+column+1)+str(row+1),'Total')
-  worksheet.write(row,column+2,'=SUM(J4:J'+ str(row)+')',total_format2)
-  worksheet.write(row,column+3,'=SUM(K4:K'+ str(row)+')',tps_format1)
-  worksheet.write(row,column+5,'=SUM(M4:M'+ str(row)+')',perc_format)
-  write_cmt(worksheet,chr(ord('@')+column+6)+str(row+1),'Total W % RW')
+  worksheet.write(row_num,column,'Total',header_format4)
+  write_cmt(worksheet,chr(ord('@')+column+1)+str(row_num+1),'Total')
+  worksheet.write(row_num,column+2,'=SUM(J4:J'+ str(row_num)+')',total_format2)
+  worksheet.write(row_num,column+3,'=SUM(K4:K'+ str(row_num)+')',tps_format1)
+  worksheet.write(row_num,column+5,'=SUM(M4:M'+ str(row_num)+')',perc_format)
+  write_cmt(worksheet,chr(ord('@')+column+6)+str(row_num+1),'Total W % RW')
 
   # create the Astra Metrics tab
   worksheet_metrics.set_column(0,0,30)
-  worksheet_metrics.set_column(1,1,20)
+  worksheet_metrics.set_column(1,1,40)
 
-  row=2
+  row_num=2
   column=0
   worksheet_metrics.merge_range('A1:B1', 'Astra Metrics Data for '+database_name, title_format3)
   worksheet_metrics.merge_range('A2:B2', 'Workload Summary', header_format5)
-  worksheet_metrics.write(row,column,'Read TPS',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+1),'Read TPS')
-  worksheet_metrics.write_formula('B'+str(row+1),'=Workload!D'+str(total_row['read']+1),num_format_lg)
-  worksheet_metrics.write(row+1,column,'Read TPMo',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+2),'Read TPMo')
-  worksheet_metrics.write_formula('B'+str(row+2),'=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',num_format_lg)
-  worksheet_metrics.write(row+2,column,'Write TPS',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+3),'Write TPS')
-  worksheet_metrics.write_formula('B'+str(row+3),'=Workload!K'+str(total_row['write']+1),num_format_lg)
-  worksheet_metrics.write(row+3,column,'Write TPMo',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+4),'Write TPMo')
-  worksheet_metrics.write_formula('B'+str(row+4),'=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',num_format_lg)
-  worksheet_metrics.write(row+4,column,'Data Size (GB)',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+5),'Data Size (GB)')
-  worksheet_metrics.write_formula('B'+str(row+5),"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',num_format_lg)
-  worksheet_metrics.write(row+5,column,'Average Uptime',title_format4)
-  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row+5),'Average Uptime')
-  worksheet_metrics.write_formula('B'+str(row+6),"='Node Data'!G"+str(total_row['node']+1),data_format_lg)
+  worksheet_metrics.write(row_num,column,'Read TPS',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+1),'Read TPS')
+  worksheet_metrics.write_formula('B'+str(row_num+1),'=Workload!D'+str(total_row['read']+1),num_format_lg)
+  worksheet_metrics.write(row_num+1,column,'Read TPMo',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+2),'Read TPMo')
+  worksheet_metrics.write_formula('B'+str(row_num+2),'=Workload!D'+str(total_row['read']+1)+'*60*60*24*365.25/12',num_format_lg)
+  worksheet_metrics.write(row_num+2,column,'Write TPS',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+3),'Write TPS')
+  worksheet_metrics.write_formula('B'+str(row_num+3),'=Workload!K'+str(total_row['write']+1),num_format_lg)
+  worksheet_metrics.write(row_num+3,column,'Write TPMo',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+4),'Write TPMo')
+  worksheet_metrics.write_formula('B'+str(row_num+4),'=Workload!K'+str(total_row['write']+1)+'*60*60*24*365.25/12',num_format_lg)
+  worksheet_metrics.write(row_num+4,column,'Data Size (GB)',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+5),'Data Size (GB)')
+  worksheet_metrics.write_formula('B'+str(row_num+5),"='Data Size'!C"+str(total_row['size']+1)+'/1000000000',num_format_lg)
+  worksheet_metrics.write(row_num+5,column,'Average Uptime',title_format4)
+  write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num+5),'Average Uptime')
+  worksheet_metrics.write_formula('B'+str(row_num+6),"='Node Data'!G"+str(total_row['node']),data_format_lg)
 
-  row+=7
-  start_row=row
+  row_num+=7
+  start_row=row_num
   for warn_cat_title,warn_cat_array in list(warnings.items()):
-    row+=1
-    worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn_cat_title,header_format5)
-    row+=1
+    row_num+=1
+    worksheet_metrics.merge_range('A'+str(row_num)+':B'+str(row_num),warn_cat_title,header_format5)
+    row_num+=1
     for warn_title,warn_array in list(warn_cat_array.items()):
       if (len(warn_array)):
-        worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn_title,title_format4)
-        write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row),warn_title)
-        row+=1
+        worksheet_metrics.merge_range('A'+str(row_num)+':B'+str(row_num),warn_title,title_format4)
+        write_cmt(worksheet_metrics,chr(ord('@')+column+1)+str(row_num),warn_title)
+        row_num+=1
         for warn in warn_array:
-          worksheet_metrics.merge_range('A'+str(row)+':B'+str(row),warn,data_format1)
-          row+=1
-  if (row==start_row):
-    worksheet_metrics.merge_range('A'+str(row+1)+':B'+str(row+1),'No potential guardrail issues identified',data_format1)
-    row+=2
+          worksheet_metrics.merge_range('A'+str(row_num)+':B'+str(row_num),warn,data_format1)
+          row_num+=1
+  if (row_num==start_row):
+    worksheet_metrics.merge_range('A'+str(row_num+1)+':B'+str(row_num+1),'No potential guardrail issues identified',data_format1)
+    row_num+=2
 
   worksheet_metrics.insert_textbox('D2',info_box,info_box_options)
 
