@@ -547,7 +547,10 @@ for database_url in data_url:
   # the ip_node is created in case the directory name (or node) is not the ip address
   # this is specifically used for adding the node uptime on the node tab
   for node_name,ip_name in list(node_ip.items()):
-    ip_node[ip_name]=node_name
+    if ip_name == '':
+      del node_ip[node_name]
+    else:
+      ip_node[ip_name]=node_name
 
   # collect dc info
   for node in os.listdir(rootPath):
