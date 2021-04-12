@@ -3,6 +3,16 @@
 #pip install xlsxwriter
 #pip install pandas
 
+# tool imports
+import os.path
+from os import path
+import xlsxwriter
+import pandas as pd
+import sys
+import datetime
+import re
+import zipfile
+
 # Astra Perseverance Version
 version = "1.0.0"
 
@@ -20,6 +30,7 @@ tp_wl = 100       # Node write latency (ms)
 tp_sstbl = 20     # SStable count per node/table
 tp_gcp = 800      # Node P99 GC pause time
 tp_drm = 100000   # Number of dropped mutations per table
+tp_ts = 1000      # Number of tombstones in a single read request
 
 #Astra Guardrails
 gr_mv = 2         # Number of materialized views per table
@@ -29,6 +40,129 @@ gr_tblcnt = 200   # Number of tables in a keyspace
 gr_colcnt = 50    # Number of columns in a table
 gr_lpar = 200     # Partition size (MB)
 
+# communicate command line help
+for argnum,arg in enumerate(sys.argv):
+  if(arg=='-h' or arg =='--help'):
+    help_content = \
+      'usage: look.py [-h] [--help] [-inc_yaml]\n'\
+      '                       [-p PATH_TO_DIAG_FOLDER]\n'\
+      '                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
+      '                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
+      '                       [-tp_si SECONDARY INDEX_GUARDRAIL]\n'\
+      '                       [-tp_sai STORAGE_ATTACHED_INDEX_GUARDRAIL]\n'\
+      '                       [-tp_lpar LARGE_PARTITON_SIZE_GUARDRAIL]\n'\
+      '                       [-tp_rl READ_LATENCY_THRESHOLD]\n'\
+      '                       [-tp_wl WRITE_LATENCY_THRESHOLD]\n'\
+      '                       [-tp_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
+      '                       [-tp_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
+      'required arguments:\n'\
+      '-p                     Path to the diagnostics folder\n'\
+      '                        Multiple diag folders accepted\n'\
+      '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
+      'optional arguments:\n'\
+      '-v, --version          Version\n'\
+      '-h, --help             This help info\n'\
+      '-tp_tblcnt             Database Table Count (Guardrail)\n'\
+      '                        Number of tables in the database\n'\
+      '                        to be listed in the Number of Tables tab\n'\
+      '                        Astra Guardrail Limit: '+str(gr_tblcnt)+'\n'\
+      '                        Test Parameter: >'+str(tp_tblcnt)+'\n'\
+      '-tp_colcnt             Table Column Count (Guardrail)\n'\
+      '                        Number of columns in a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_colcnt)+'\n'\
+      '                        Test Parameter: >'+str(tp_colcnt)+'\n'\
+      '-tp_mv                 Materialized Views  (Guardrail)\n'\
+      '                        Number of Materialized Views of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_mv)+'\n'\
+      '                        Test Parameter: >'+str(tp_mv)+'\n'\
+      '-tp_si                Secondary Indexes  (Guardrail)\n'\
+      '                        Number of Secondary Indexes of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_si)+'\n'\
+      '                        Test Parameter: >'+str(tp_si)+'\n'\
+      '-tp_sai                Storage Attached Indexes  (Guardrail)\n'\
+      '                        Number of SAI of a table\n'\
+      '                        Astra Guardrail Limit: '+str(gr_sai)+'\n'\
+      '                        Test Parameter: >'+str(tp_sai)+'\n'\
+      '-tp_lpar               Large Partitions (Guardrail)\n'\
+      '                        Size of partition in MB\n'\
+      '                        to be listed in the Large Partition tab\n'\
+      '                        Astra Guardrail Limit: '+str(gr_lpar)+'MB\n'\
+      '                        Test Parameter: >'+str(tp_lpar)+'\n'\
+      '-tp_rl                 Local Read Latency (Database Health)\n'\
+      '                        Local read time(ms) in the cfstats log \n'\
+      '                        to be listed in the Read Latency tab\n'\
+      '                        Test Parameter: >'+str(tp_rl)+'\n'\
+      '-tp_wl                 Local Write Latency (Database Health)\n'\
+      '                        Local write time(ms) in the cfstats log \n'\
+      '                        to be listed in the Read Latency tab\n'\
+      '                        Test Parameter: >'+str(tp_wl)+'\n'\
+      '-tp_sstbl              SSTable Count (Database Health)\n'\
+      '                        SStable count in the cfstats log \n'\
+      '                        to be listed in the Table Qantity tab\n'\
+      '                        Test Parameter: >'+str(tp_sstbl)+'\n'\
+      '-tp_drm                Dropped Mutations (Database Health)\n'\
+      '                        Dropped Mutation count in the cfstats log \n'\
+      '                        to be listed in the Dropped Mutation tab\n'\
+      '                        Test Parameter: >'+str(tp_drm)+'\n\n'\
+      '-tp_gcp                GCPauses (Database Health)\n'\
+      '                        Node P99 GC pause time (ms)\n'\
+      '                        to be listed in the GC Pauses tab\n'\
+      '                        Test Parameter: >'+str(tp_gcp)+'\n'\
+      '-tp_gcp                Tombstones (Database Health)\n'\
+      '                        Number of tombstones in a\n'\
+      '                        single read request\n'\
+      '                        Test Parameter: >'+str(tp_ts)+'\n\n'\
+      'Notice: Test parameters cannot be larger than guardrails'
+    exit(help_content)
+  elif(arg=='-v' or arg =='--version'):
+    exit("Version " + version)
+
+# initialize script variables
+data_url = []
+read_threshold = 1
+write_threshold = 1
+new_dc = ''
+show_help = ''
+include_system = 0
+log_df = '%Y-%m-%d %H:%M:%S'
+dt_fmt = '%m/%d/%Y %I:%M%p'
+tz = {}
+
+
+# collect and analyze command line arguments
+for argnum,arg in enumerate(sys.argv):
+  if(arg=='-p'):
+    data_url.append(sys.argv[argnum+1])
+  elif(arg=='-tp_rl'):
+    tp_rl = int(sys.argv[argnum+1])
+  elif(arg=='-tp_wl'):
+    tp_wl = int(sys.argv[argnum+1])
+  elif(arg=='-tp_sstbl'):
+    tp_sstbl = int(sys.argv[argnum+1])
+  elif(arg=='-tp_drm'):
+    tp_drm = int(sys.argv[argnum+1])
+  elif(arg=='-tp_ts'):
+    tp_ts = int(sys.argv[argnum+1])
+  elif(arg=='-tp_lpar'):
+    if int(sys.argv[argnum+1]) <= gr_lpar:
+      tp_lpar = int(sys.argv[argnum+1])
+  elif(arg=='-tp_gcp'):
+    tp_gcp = int(sys.argv[argnum+1])
+  elif(arg=='-tp_tblcnt'):
+    if int(sys.argv[argnum+1]) <= gr_tblcnt:
+      tp_tblcnt = int(sys.argv[argnum+1])
+  elif(arg=='-tp_colcnt'):
+    if int(sys.argv[argnum+1]) <= gr_colcnt:
+      tp_colcnt = int(sys.argv[argnum+1])
+  elif(arg=='-tp_mv'):
+    if int(sys.argv[argnum+1]) <= gr_mv:
+      tp_mv = int(sys.argv[argnum+1])
+  elif(arg=='-tp_si'):
+    if int(sys.argv[argnum+1]) <= gr_si:
+      tp_si = int(sys.argv[argnum+1])
+  elif(arg=='-tp_sai'):
+    if int(sys.argv[argnum+1]) <= gr_sai:
+      tp_sai = float(sys.argv[argnum+1])
 
 info_box = 'DataStax Perseverance\n'\
               'Version '+version+'\n'\
@@ -57,22 +191,14 @@ info_box = 'DataStax Perseverance\n'\
               ' - Local table write latency more than '+str(tp_wl)+'ms\n'\
               ' - Node P99 GC pause time greater than '+str(tp_gcp)+'ms\n'\
               ' - More than '+str(tp_sstbl)+' SSTables per table\n'\
-              ' - More than '+str(tp_drm)+' dropped mutations per table\n\n'\
+              ' - More than '+str(tp_drm)+' dropped mutations per table\n'\
+              ' - More than '+str(tp_ts)+' tombstones in a single read request\n\n'\
               '*** VALUES THAT HAVE GONE BEYOND THE GUARDRAILS\n'\
               'Supported data in separate spreadsheet tabs'\
  
 #
 info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
 
-# tool imports
-import os.path
-from os import path
-import xlsxwriter
-import pandas as pd
-import sys
-import datetime
-import re
-import zipfile
 
 # write comment on worksheet field
 def write_cmt(wksht,coord,title,vis=0):
@@ -132,16 +258,13 @@ def get_dc(rootPath,statuspath,node):
     for line in statusFile:
       if('Datacenter:' in line):
         dc = str(line.split(':')[1].strip())
-        try:
-          type(node_status_data[dc])
-        except:
-          node_status_data[dc]={}
         if dc not in dc_array:
           dc_array.append(dc)
           dc_gcpause[dc]=[]
           newest_gc[dc]={'jd':0.0,'dt':''}
           oldest_gc[dc]={'jd':99999999999.9,'dt':''}
           max_gc[dc]=''
+          node_status_data[dc]={}
       if line.count('.')>=3:
         ip_addr = line.split()[1]
         if ip_addr in ip_node:
@@ -168,7 +291,8 @@ def get_dc(rootPath,statuspath,node):
     exclude_tab.append('node')
 
 # collect GC info from system.log
-def parseGC(node,systemlog,systemlogpath):
+def parseGC_TS(node,systemlog,systemlogpath):
+  dc = node_dc[node]
   if(zipfile.is_zipfile(systemlog)):
     zf = zipfile.ZipFile(systemlog, 'r')
     systemlogFile = zf.read(zf.namelist()[0])
@@ -180,7 +304,6 @@ def parseGC(node,systemlog,systemlogpath):
       else: date_pos=3
       dt = line.split()[date_pos].strip()
       tm = line.split()[date_pos+1].split(',')[0].strip()
-      dc = node_dc[node]
       gcpause = line[line.find('GC in')+6:line.find('ms.')]
       ldatetime = dt + ' ' + re.sub(',.*$','',tm.strip())
       log_dt = datetime.datetime.strptime(ldatetime,log_df)
@@ -198,6 +321,19 @@ def parseGC(node,systemlog,systemlogpath):
       if(newest_gc[node]['jd']<log_jd): newest_gc[node]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(oldest_gc[node]['jd']>log_jd): oldest_gc[node]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(max(node_gcpause[node])==int(gcpause)): max_gc[node]= ldatetime
+    elif('tombstone cells' in line):
+      ts_tombstones=int(line.split('live rows and')[1].split()[0])
+      if ts_tombstones >= tp_ts:
+        ts_read=int(line.split('- Read')[1].split()[0])
+        ts_query=line.split('cells for query')[1].strip()
+        ts_ks=ts_query.split('.')[0].split()[len(ts_query.split('.')[0].split())-1]
+        ts_tbl=ts_query.split('.')[1].split()[0]
+        tombstone_data.append({'dc':dc,'node':node,'reads':ts_read,'count':ts_tombstones,'ks':ts_ks,'tbl':ts_tbl})
+        try:
+          type(warnings['Database Health']['Tombstones'])
+        except:
+          warnings['Database Health']['Tombstones']=['Tombstones greater than '+str(tp_ts)+' in a single read request']
+
 
 # organize the GC pauses into percentage
 def get_gc_data(level,name,gcpause,is_node):
@@ -268,124 +404,6 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
           return def_val
   else:
     exit('ERROR: No File: ' + filepath)
-
-# initialize script variables
-data_url = []
-read_threshold = 1
-write_threshold = 1
-new_dc = ''
-show_help = ''
-include_system = 0
-log_df = '%Y-%m-%d %H:%M:%S'
-dt_fmt = '%m/%d/%Y %I:%M%p'
-tz = {}
-
-# communicate command line help
-for argnum,arg in enumerate(sys.argv):
-  if(arg=='-h' or arg =='--help'):
-    help_content = \
-      'usage: look.py [-h] [--help] [-inc_yaml]\n'\
-      '                       [-p PATH_TO_DIAG_FOLDER]\n'\
-      '                       [-tp_tblcnt CLUSTER_TABLE_COUNT_GUARDRAIL]\n'\
-      '                       [-tp_mv MATERIALIZED_VIEW_GUARDRAIL]\n'\
-      '                       [-tp_si SECONDARY INDEX_GUARDRAIL]\n'\
-      '                       [-tp_sai STORAGE_ATTACHED_INDEX_GUARDRAIL]\n'\
-      '                       [-tp_lpar LARGE_PARTITON_SIZE_GUARDRAIL]\n'\
-      '                       [-tp_rl READ_LATENCY_THRESHOLD]\n'\
-      '                       [-tp_wl WRITE_LATENCY_THRESHOLD]\n'\
-      '                       [-tp_sstbl SSTABLE_COUNT_THRESHOLD]\n'\
-      '                       [-tp_drm DROPPED_MUTATIONS_COUNT_THRESHOLD]\n'\
-      'required arguments:\n'\
-      '-p                     Path to the diagnostics folder\n'\
-      '                        Multiple diag folders accepted\n'\
-      '                        i.e. -p PATH1 -p PATH2 -p PATH3\n'\
-      'optional arguments:\n'\
-      '-v, --version          Version\n'\
-      '-h, --help             This help info\n'\
-      '-tp_tblcnt             Database Table Count (Guardrail)\n'\
-      '                        Number of tables in the database\n'\
-      '                        to be listed in the Number of Tables tab\n'\
-      '                        Astra Guardrail Limit: '+str(gr_tblcnt)+'\n'\
-      '                        Test Parameter: >'+str(tp_tblcnt)+'\n'\
-      '-tp_colcnt             Table Column Count (Guardrail)\n'\
-      '                        Number of columns in a table\n'\
-      '                        Astra Guardrail Limit: '+str(gr_colcnt)+'\n'\
-      '                        Test Parameter: >'+str(tp_colcnt)+'\n'\
-      '-tp_mv                 Materialized Views  (Guardrail)\n'\
-      '                        Number of Materialized Views of a table\n'\
-      '                        Astra Guardrail Limit: '+str(gr_mv)+'\n'\
-      '                        Test Parameter: >'+str(tp_mv)+'\n'\
-      '-tp_si                Secondary Indexes  (Guardrail)\n'\
-      '                        Number of Secondary Indexes of a table\n'\
-      '                        Astra Guardrail Limit: '+str(gr_si)+'\n'\
-      '                        Test Parameter: >'+str(tp_si)+'\n'\
-      '-tp_sai                Storage Attached Indexes  (Guardrail)\n'\
-      '                        Number of SAI of a table\n'\
-      '                        Astra Guardrail Limit: '+str(gr_sai)+'\n'\
-      '                        Test Parameter: >'+str(tp_sai)+'\n'\
-      '-tp_lpar               Large Partitions (Guardrail)\n'\
-      '                        Size of partition in MB\n'\
-      '                        to be listed in the Large Partition tab\n'\
-      '                        Astra Guardrail Limit: '+str(gr_lpar)+'MB\n'\
-      '                        Test Parameter: >'+str(tp_lpar)+'\n'\
-      '-tp_rl                 Local Read Latency (Database Health)\n'\
-      '                        Local read time(ms) in the cfstats log \n'\
-      '                        to be listed in the Read Latency tab\n'\
-      '                        Test Parameter: >'+str(tp_rl)+'\n'\
-      '-tp_wl                 Local Write Latency (Database Health)\n'\
-      '                        Local write time(ms) in the cfstats log \n'\
-      '                        to be listed in the Read Latency tab\n'\
-      '                        Test Parameter: >'+str(tp_wl)+'\n'\
-      '-tp_sstbl              SSTable Count (Database Health)\n'\
-      '                        SStable count in the cfstats log \n'\
-      '                        to be listed in the Table Qantity tab\n'\
-      '                        Test Parameter: >'+str(tp_sstbl)+'\n'\
-      '-tp_drm                Dropped Mutations (Database Health)\n'\
-      '                        Dropped Mutation count in the cfstats log \n'\
-      '                        to be listed in the Dropped Mutation tab\n'\
-      '                        Test Parameter: >'+str(tp_drm)+'\n\n'\
-      '-tp_gcp                GCPauses (Database Health)\n'\
-      '                        Node P99 GC pause time (ms)\n'\
-      '                        to be listed in the GC Pauses tab\n'\
-      '                        Test Parameter: >'+str(tp_gcp)+'\n\n'\
-      'Notice: Test parameters cannot be larger than guardrails'
-    exit(help_content)
-  elif(arg=='-v' or arg =='--version'):
-    exit("Version " + version)
-
-# collect and analyze command line arguments
-for argnum,arg in enumerate(sys.argv):
-  if(arg=='-p'):
-    data_url.append(sys.argv[argnum+1])
-  elif(arg=='-tp_rl'):
-    tp_rl = float(sys.argv[argnum+1])
-  elif(arg=='-tp_wl'):
-    tp_wl = float(sys.argv[argnum+1])
-  elif(arg=='-tp_sstbl'):
-    tp_sstbl = float(sys.argv[argnum+1])
-  elif(arg=='-tp_drm'):
-    tp_drm = float(sys.argv[argnum+1])
-  elif(arg=='-tp_lpar'):
-    if int(sys.argv[argnum+1]) <= gr_lpar:
-      tp_lpar = float(sys.argv[argnum+1])
-  elif(arg=='-tp_gcp'):
-    tp_gcp = float(sys.argv[argnum+1])
-  elif(arg=='-tp_tblcnt'):
-    if int(sys.argv[argnum+1]) <= gr_tblcnt:
-      tp_tblcnt = float(sys.argv[argnum+1])
-  elif(arg=='-tp_colcnt'):
-    if int(sys.argv[argnum+1]) <= gr_colcnt:
-      tp_colcnt = float(sys.argv[argnum+1])
-  elif(arg=='-tp_mv'):
-    if int(sys.argv[argnum+1]) <= gr_mv:
-      tp_mv = float(sys.argv[argnum+1])
-  elif(arg=='-tp_si'):
-    if int(sys.argv[argnum+1]) <= gr_si:
-      tp_si = float(sys.argv[argnum+1])
-  elif(arg=='-tp_sai'):
-    if int(sys.argv[argnum+1]) <= gr_sai:
-      tp_sai = float(sys.argv[argnum+1])
-
 
 
 # Organize primary support tab information
@@ -512,6 +530,7 @@ for database_url in data_url:
   ip_node = {}
   node_status_data = {}
   row={}
+  tombstone_data=[]
 
   warnings = {'Astra Guardrails':{},'Database Health':{}}
 
@@ -558,6 +577,8 @@ for database_url in data_url:
       del node_ip[node_name]
     else:
       ip_node[ip_name]=node_name
+      
+      
 
   # collect dc info
   for node_path in os.listdir(rootPath):
@@ -867,13 +888,13 @@ for database_url in data_url:
     for tablename,tablesize in list(sizetable.items()):
       table_count.append({'keyspace':ks,'table':tablename,'count':tablesize})
 
-  # sort R/W data
+  # sort data
   read_count.sort(reverse=True,key=sortFunc)
   write_count.sort(reverse=True,key=sortFunc)
   table_count.sort(reverse=True,key=sortFunc)
   total_rw = total_reads+total_writes
     
-  # collect GC Data
+  # collect GC/Tomstone Data
   rootPath = database_url + '/nodes/'
   for node_path in os.listdir(rootPath):
     nodetoolpath = rootPath + node_path + '/nodetool'
@@ -897,9 +918,9 @@ for database_url in data_url:
           for logfile in os.listdir(systemlogpath):
             if(logfile.split('.')[0] == 'system'):
               systemlog = systemlogpath + '/' + logfile
-              parseGC(node,systemlog,systemlogpath)
+              parseGC_TS(node,systemlog,systemlogpath)
 
-  # collect GC data from additional log path
+  # collect GC/Tombstone data from additional log path
   addlogs = './AdditionalLogs'
   if(path.exists(addlogs)):
     for node_path in os.listdir(rootPath):
@@ -917,8 +938,11 @@ for database_url in data_url:
                 systemlogpath = logdir + '/'
                 systemlog = systemlogpath + '/' + logfile
                 cor_node = node.replace('-','.')
-                parseGC(cor_node,systemlog,systemlogpath)
+                parseGC_TS(cor_node,systemlog,systemlogpath)
 
+  # sort data
+  tombstone_data.sort(reverse=True,key=sortFunc)
+  
   #collect database GC Percents
   get_gc_data('Database',database_name,database_gcpause,0)
 
@@ -987,6 +1011,8 @@ for database_url in data_url:
     if (sheet_array['sheet_name'] not in exclude_tab):
       stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
       stats_sheets[sheet_array['sheet_name']].freeze_panes(sheet_array['freeze_row'],sheet_array['freeze_col'])
+  ts_worksheet = workbook.add_worksheet('Tombstones')
+  ts_worksheet.freeze_panes(2,2)
   gc_worksheet = workbook.add_worksheet('GC Pauses')
   gc_worksheet.freeze_panes(2,2)
 
@@ -1396,9 +1422,43 @@ for database_url in data_url:
   stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
   total_row['node'] = ro+1
   
+  # create Tombstones Pause tab
+  ts_headers=['Sample DC','Sample Node','Keyspace','Table','Live Rows Read','Tombstones']
+  ts_cols=['dc','node','ks','tbl','reads','count']
+  ts_col_styles=[data_format,data_format,data_format,data_format,num_format1,num_format1]
+  ts_widths=[14,18,18,25,16,16]
+
+  prev_dc=0
+  row_num=0
+  column=0
+  dupl=[]
+  for header in ts_headers:
+    ts_worksheet.write(row_num,column,header,title_format)
+    write_cmt(worksheet,chr(ord('@')+column+1)+str(row_num+1),header)
+    column+=1
+
+  for col_num,col_width in enumerate(ts_widths):
+    ts_worksheet.set_column(col_num,col_num,col_width)
+
+  column=0
+  row_num+=1
+  for ts_data_array in tombstone_data:
+    dup_chk = ts_data_array['ks']+ts_data_array['tbl']
+    if dup_chk not in dupl:
+      dupl.append(dup_chk)
+      for col_name in ts_cols:
+        ts_worksheet.write(row_num,column,ts_data_array[col_name])
+        column+=1
+      row_num+=1
+      column=0
+
+#      tombstone_data.append({'dc':dc,'node':node,'reads':ts_read,'count':ts_tombstones,'query':ts_query})
+
+
+
   # create GC Pause tab
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
-  gc_fields=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
+  gc_cols=['Name','Level','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','max_gc']
   gc_widths=[18,14,8,6,6,6,6,6,6,6,6,35,35,17]
 
   prev_dc=0
@@ -1416,7 +1476,7 @@ for database_url in data_url:
   for name, gc_val in list(gc_data.items()):
     if(gc_val['Level']=='Database'):
       row_num+=1
-      for field in gc_fields:
+      for field in gc_cols:
         if(field=='From'):
           gc_worksheet.write(row_num,column,oldest_gc[name]['dt'],data_format)
         elif(field=='To'):
@@ -1436,7 +1496,7 @@ for database_url in data_url:
   for name, gc_val in list(gc_data.items()):
     if(gc_val['Level']=='DC'):
       dc_count += 1
-      for field in gc_fields:
+      for field in gc_cols:
         if(field=='From'):
           gc_worksheet.write(row_num,column,oldest_gc[name]['dt'])
         elif(field=='To'):
@@ -1456,7 +1516,7 @@ for database_url in data_url:
     for name, gc_val in list(gc_data.items()):
       node_ip_addr = gc_val['Name']
       if(gc_val['Level']=='Node' and dc_name==node_dc[node_ip_addr]):
-        for field in gc_fields:
+        for field in gc_cols:
           if(field=='Level'):
             gc_worksheet.write(row_num,column,node_dc[gc_val['Name']],data_format)
           elif(field=='From'):
