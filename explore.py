@@ -108,7 +108,7 @@ for argnum,arg in enumerate(sys.argv):
       '                        Node P99 GC pause time (ms)\n'\
       '                        to be listed in the GC Pauses tab\n'\
       '                        Test Parameter: >'+str(tp_gcp)+'\n'\
-      '-tp_gcp                Tombstones (Database Health)\n'\
+      '-tp_ts                 Tombstones (Database Health)\n'\
       '                        Number of tombstones in a\n'\
       '                        single read request\n'\
       '                        Test Parameter: >'+str(tp_ts)+'\n\n'\
@@ -191,8 +191,8 @@ info_box = 'DataStax Perseverance\n'\
               ' - Local table write latency more than '+str(tp_wl)+'ms\n'\
               ' - Node P99 GC pause time greater than '+str(tp_gcp)+'ms\n'\
               ' - More than '+str(tp_sstbl)+' SSTables per table\n'\
-              ' - More than '+str(tp_drm)+' dropped mutations per table\n'\
-              ' - More than '+str(tp_ts)+' tombstones in a single read request\n\n'\
+              ' - More than '+str("{:,}".format(tp_drm))+' dropped mutations per table\n'\
+              ' - More than '+str("{:,}".format(tp_ts))+' tombstones in a single read request\n\n'\
               '*** VALUES THAT HAVE GONE BEYOND THE GUARDRAILS\n'\
               'Supported data in separate spreadsheet tabs'\
  
@@ -332,7 +332,7 @@ def parseGC_TS(node,systemlog,systemlogpath):
         try:
           type(warnings['Database Health']['Tombstones'])
         except:
-          warnings['Database Health']['Tombstones']=['Tombstones greater than '+str(tp_ts)+' in a single read request']
+          warnings['Database Health']['Tombstones']=['Tombstones greater than '+str("{:,}".format(tp_ts))+' in a single read request']
 
 
 # organize the GC pauses into percentage
@@ -410,7 +410,7 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
 sheets_data = []
 sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[14,30,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Max','P99','P98','P95','P75','P50','Min','','Datacenter','Node','Max','P99','P98','P95','P75','P50','Min'],'widths':[20,20,10,10,10,10,10,10,10,3,20,20,10,10,10,10,10,10,10],'extra':0,'comment':'','tp_type':''})
-sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str(tp_drm)+' dropped mutations (cfstats)','tp_type':'drm'})
+sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str("{:,}".format(tp_drm))+' dropped mutations (cfstats)','tp_type':'drm'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Sample Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':1,'comment':'','tp_type':'tblcnt'})
 sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Table with partiton sizes greater than '+str(tp_lpar)+' (cfstats)','tp_type':'lpar'})
 sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':tp_sstbl,'strip':'','extra':1,'comment':'','tp_type':'sstbl'})
@@ -1012,9 +1012,9 @@ for database_url in data_url:
       stats_sheets[sheet_array['sheet_name']] = workbook.add_worksheet(sheet_array['tab_name'])
       stats_sheets[sheet_array['sheet_name']].freeze_panes(sheet_array['freeze_row'],sheet_array['freeze_col'])
   ts_worksheet = workbook.add_worksheet('Tombstones')
-  ts_worksheet.freeze_panes(2,2)
+  ts_worksheet.freeze_panes(1,0)
   gc_worksheet = workbook.add_worksheet('GC Pauses')
-  gc_worksheet.freeze_panes(2,2)
+  gc_worksheet.freeze_panes(2,0)
 
   # Create Formats
   header_format1 = workbook.add_format({
@@ -1447,14 +1447,10 @@ for database_url in data_url:
     if dup_chk not in dupl:
       dupl.append(dup_chk)
       for col_name in ts_cols:
-        ts_worksheet.write(row_num,column,ts_data_array[col_name])
+        ts_worksheet.write(row_num,column,ts_data_array[col_name],ts_col_styles[column])
         column+=1
       row_num+=1
       column=0
-
-#      tombstone_data.append({'dc':dc,'node':node,'reads':ts_read,'count':ts_tombstones,'query':ts_query})
-
-
 
   # create GC Pause tab
   gc_headers=['Name','Level/DC','Pauses','Max','P99','P98','P95','P90','P75','P50','Min','From','To','Max Date']
