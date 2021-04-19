@@ -12,6 +12,7 @@ import sys
 import datetime
 import re
 import zipfile
+import json
 
 # Astra Perseverance Version
 version = "1.0.0"
@@ -199,7 +200,6 @@ info_box = 'DataStax Perseverance\n'\
 #
 info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
 
-
 # write comment on worksheet field
 def write_cmt(wksht,coord,title,vis=0):
   for cmt_array in comments:
@@ -220,7 +220,19 @@ def add_tp_tbl(gr,ks,tbl,src_ks,src_tbl):
     if (ks+'.'+tbl) not in tp_tbl_data[gr][src_ks][src_tbl]:
       tp_tbl_data[gr][src_ks][src_tbl].append(ks+'.'+tbl)
 
+#Add element to warning
+def add_to_warning(lev_1,lev_2,warn_val):
+  try:
+    type(warnings[lev_1])
+  except:
+    warnings[lev_1]={}
+  try:
+    if warn_val not in warnings[lev_1][lev_2]:
+      warnings[lev_1][lev_2].append(warn_val)
+  except:
+    warnings[lev_1][lev_2]=[warn_val]
 
+# extract ip address from str
 def extract_ip(ip_text):
   ip_add = []
   ips = re.findall(r'[0-9]+(?:\.[0-9]+){3}', ip_text)
@@ -231,23 +243,26 @@ def extract_ip(ip_text):
 # the node_ip is created in case the directory name (or node) is not the ip address
 # this is specifically used for adding the node uptime on the node tab
 def find_ip_addr(node,node_path):
-  systemlog = rootPath + node_path + '/logs/cassandra/system.log'
-  if path.isfile(systemlog):
-    systemlogFile = open(systemlog, 'r')
-    for line in systemlogFile:
+  gossippath = rootPath + node_path + '/nodetool/gossipinfo'
+  if path.isfile(gossippath):
+    gossipFile = open(gossippath, 'r')
+    for line in gossipFile:
       if node in line:
-        try:
-          ip_text =line.split(node)[1].split()[0].strip('/')
-          ip_adr = extract_ip(ip_text)
-          node_ip[node]=ip_adr
-          systemlogFile.close()
-          return 0
-        except:
-          cont=1
-    systemlogFile.close()
+        ip_addr = line.split('/')[1].strip('\n')
+        node_ip[node]=ip_addr
+        ip_node[ip_addr]=node
+        return 0
   else:
-    exit('The system log file for node ' + node_path + ' is not available (' + systemlog +')')
+    exit('The gossip file for node ' + node + ' is not available (' + gossippath +')')
   return 1
+
+# Get the OSS Cassandra Version
+def get_oss_ver(cvpath):
+  if path.isfile(cvpath):
+    gossipFile = open(cvpath, 'r')
+    for line in gossipFile:
+      return line.split(':')[1].strip().strip('\n')
+  else: return "OSS"
 
 # collect the dc name for each node
 def get_dc(rootPath,statuspath,node):
@@ -279,13 +294,7 @@ def get_dc(rootPath,statuspath,node):
             values = line.split();
             node_status_data[dc][node_name] = {'Load':values[2] + ' ' + values[3],'Tokens':int(values[4]),'Rack':values[7]}
         else:
-          try:
-            type(warnings['Missing Node Data'])
-          except:
-            warnings['Missing Data']={'Missing Node Data':[]}
-          warn_val=ip_addr
-          if warn_val not in warnings['Missing Data']['Missing Node Data']:
-            warnings['Missing Data']['Missing Node Data'].append(warn_val)
+          add_to_warning('Missing Data','Missing Node Data',ip_addr)
           
   else:
     exclude_tab.append('node')
@@ -322,10 +331,18 @@ def parseGC_TS(node,systemlog,systemlogpath):
       if(oldest_gc[node]['jd']>log_jd): oldest_gc[node]={'jd':log_jd,'dt':ldatetime + ' ' + tz[node]}
       if(max(node_gcpause[node])==int(gcpause)): max_gc[node]= ldatetime
     elif('tombstone cells' in line):
-      ts_tombstones=int(line.split('live rows and')[1].split()[0])
+      if 'lives rows and' in line:
+        ts_tombstones=int(line.split('live rows and')[1].split()[0])
+      elif 'live and' in line:
+        ts_tombstones=int(line.split('live and')[1].split()[0])
+      else:
+        ts_tombstones=0
       if ts_tombstones >= tp_ts:
         ts_read=int(line.split('- Read')[1].split()[0])
-        ts_query=line.split('cells for query')[1].strip()
+        if 'cells for query' in line:
+          ts_query=line.split('cells for query')[1].strip()
+        if 'tombstone cells in' in line:
+          ts_query=line.split('tombstone cells in')[1].strip()
         ts_ks=ts_query.split('.')[0].split()[len(ts_query.split('.')[0].split())-1]
         ts_tbl=ts_query.split('.')[1].split()[0]
         tombstone_data.append({'dc':dc,'node':node,'reads':ts_read,'count':ts_tombstones,'ks':ts_ks,'tbl':ts_tbl})
@@ -408,7 +425,7 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
 
 # Organize primary support tab information
 sheets_data = []
-sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Load','Tokens','Rack','Uptime (sec)','Uptime'],'widths':[14,30,14,8,11,15,15],'extra':0,'comment':'','tp_type':''})
+sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Load','Tokens','Rack','Uptime (sec)','Uptime','Workload','Version'],'widths':[14,30,14,8,11,15,15,15,15],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Max','P99','P98','P95','P75','P50','Min','','Datacenter','Node','Max','P99','P98','P95','P75','P50','Min'],'widths':[20,20,10,10,10,10,10,10,10,3,20,20,10,10,10,10,10,10,10],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str("{:,}".format(tp_drm))+' dropped mutations (cfstats)','tp_type':'drm'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Sample Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':1,'comment':'','tp_type':'tblcnt'})
@@ -531,44 +548,42 @@ for database_url in data_url:
   node_status_data = {}
   row={}
   tombstone_data=[]
-
+  workloads = {}
   warnings = {'Astra Guardrails':{},'Database Health':{}}
 
   rootPath = database_url + '/nodes/'
 
+ 
   # collect node info
-  if len(node_ip)==0:
-    for node_path in os.listdir(rootPath):
-      nodetoolpath = rootPath + node_path + '/nodetool'
-      if path.exists(nodetoolpath):
-        node = extract_ip(node_path)
-        if (node==''):
-          node=node_path
-        statuspath = rootPath + node_path + '/nodetool/status'
-        if(path.exists(statuspath)):
-          statusFile = open(statuspath, 'r')
-          for line in statusFile:
-            if line.count('.')>=3:
-              ip_addr = line.split()[1]
-              if ip_addr==node:
-                node_ip[node]=ip_addr
-                next_ip=0
-              elif ip_addr==node.replace('_','.'):
-                node_ip[node]=ip_addr
-                next_ip=0
-              elif ip_addr==node.replace('-','.'):
-                node_ip[node]=ip_addr
-                next_ip=0
-
-    for node_path in os.listdir(rootPath):
+  for node_path in os.listdir(rootPath):
+    nodetoolpath = rootPath + node_path + '/nodetool'
+    if path.exists(nodetoolpath):
+      node = extract_ip(node_path)
+      if (node==''):
+        node=node_path
       statuspath = rootPath + node_path + '/nodetool/status'
-      if path.exists(statuspath):
-        node = extract_ip(node_path)
-        if (node==''):
-          node=node_path
-        if node not in node_ip:
-          find_ip_addr(node,node_path)
-    statusFile.close()
+      if(path.exists(statuspath)):
+        statusFile = open(statuspath, 'r')
+        for line in statusFile:
+          if line.count('.')>=3:
+            ip_addr = line.split()[1]
+            if ip_addr==node:
+              node_ip[node]=ip_addr
+            elif ip_addr==node.replace('_','.'):
+              node_ip[node]=ip_addr
+            elif ip_addr==node.replace('-','.'):
+              node_ip[node]=ip_addr
+  statusFile.close()
+
+  for node_path in os.listdir(rootPath):
+    statuspath = rootPath + node_path + '/nodetool/status'
+    if path.exists(statuspath):
+      node = extract_ip(node_path)
+      if (node==''):
+        node=node_path
+      if node not in node_ip:
+        find_ip_addr(node,node_path)
+
 
   # the ip_node is created in case the directory name (or node) is not the ip address
   # this is specifically used for adding the node uptime on the node tab
@@ -577,185 +592,239 @@ for database_url in data_url:
       del node_ip[node_name]
     else:
       ip_node[ip_name]=node_name
-      
-      
 
   # collect dc info
+  initial_run=1
   for node_path in os.listdir(rootPath):
-    nodetoolpath = rootPath + node_path + '/nodetool'
-    if path.exists(nodetoolpath):
-      node = extract_ip(node_path)
-      if (node==''):
-        node=node_path
-      if node in node_ip:
-        ckpath = rootPath + node_path + '/nodetool'
-        if path.isdir(ckpath):
-          statuspath = rootPath + node_path + '/nodetool/status'
-          get_dc(rootPath,statuspath,node)
-          if database_name == '':
-            databasepath = rootPath + node_path + '/nodetool/describecluster'
-            database_name = get_param(databasepath,'Name:',1)
-            newest_gc[database_name]={'jd':0.0,'dt':''}
-            oldest_gc[database_name]={'jd':99999999999.9,'dt':''}
-            max_gc[database_name]=''
+    if initial_run==1:
+      nodetoolpath = rootPath + node_path + '/nodetool'
+      if path.exists(nodetoolpath):
+        node = extract_ip(node_path)
+        if (node==''):
+          node=node_path
+        if node in node_ip:
+          ckpath = rootPath + node_path + '/nodetool'
+          if path.isdir(ckpath):
+            statuspath = rootPath + node_path + '/nodetool/status'
+            get_dc(rootPath,statuspath,node)
+            if database_name == '':
+              databasepath = rootPath + node_path + '/nodetool/describecluster'
+              database_name = get_param(databasepath,'Name:',1)
+              newest_gc[database_name]={'jd':0.0,'dt':''}
+              oldest_gc[database_name]={'jd':99999999999.9,'dt':''}
+              max_gc[database_name]=''
 
-      schemapath = rootPath + node_path + '/driver'
-      if path.isdir(schemapath):
-        try:
-          schemaFile = open(schemapath + '/schema', 'r')
-        except:
-          exit('Error: No schema file - ' + schemapath + '/schema')
+        schemapath = rootPath + node_path + '/driver'
+        if path.isdir(schemapath):
+          try:
+            schemaFile = open(schemapath + '/schema', 'r')
+          except:
+            exit('Error: No schema file - ' + schemapath + '/schema')
+        initial_run=0
 
-  # collect and analyze schema
-  ks = ''
-  dc_ks_rf = {}
-  prev_node = ''
-  is_nodes=0
-
+  # get workload info
+  initial_run=1
+  dse_nodes=0
+  nd_version=''
+  nd_workload=''
   for node_path in os.listdir(rootPath):
-    nodetoolpath = rootPath + node_path + '/nodetool'
-    if path.exists(nodetoolpath):
-      node = extract_ip(node_path)
-      if (node==''):
-        node=node_path
-      if node in node_ip:
-        if (prev_node==''):
-          if (ks==''):
-            is_nodes=1
-            prev_node=node
-            ks = ''
-            tbl = ''
-            create_stmt = {}
-            tbl_data = {}
-            schemapath = rootPath + node_path + '/driver'
-            if path.isdir(schemapath):
-              schemaFile = open(schemapath + '/schema', 'r')
-              for line in schemaFile:
-                line = line.strip('\n').strip()
-                if (line==''): tbl=''
-                if("CREATE KEYSPACE" in line):
-                  cur_rf = 0
-                  prev_ks = ks
-                  ks = line.split()[2].strip('"')
-                  tbl_data[ks] = {'cql':line,'rf':0}
-                  rf=0;
+    if initial_run==1:
+      gossippath = rootPath + node_path + '/nodetool/gossipinfo'
+      cv_path = rootPath + node_path + '/nodetool/version'
+      if path.isfile(gossippath):
+        gossipFile = open(gossippath, 'r')
+        dc=''
+        for line in gossipFile:
+          if '/' in line:
+            if dc != '' and good_node==1:
+              node_status_data[dc][node_name]['Version']=nd_version
+              node_status_data[dc][node_name]['Workload']=nd_workload
+              if dse_nodes==0:
+                node_status_data[dc][node_name]['Workload']='OSS Cassandra'
+                node_status_data[dc][node_name]['Version']=get_oss_ver(cv_path)
+            ip_addr = line.split('/')[1].strip('\n')
+            if ip_addr in ip_node:
+              node_name = ip_node[ip_addr]
+              good_node=1
+            else:
+              add_to_warning('Missing Data','Missing Node Data',ip_addr)
+              good_node=0
+          elif 'DC:' in line and good_node==1:
+            dc=line.split(':')[2].strip('\n')
+          elif 'X_11_PADDING' in line and good_node==1:
+            start_line=line.split(':')[0]+':'+line.split(':')[1]+':'
+            line_array=json.loads(line.lstrip(start_line))
+            if line_array['workload']=='Cassandra': nd_workload='DSE Core'
+            else:
+              nd_workload=line_array['workload']
+              add_to_warning('Workload','Not Supported',line_array['workload'])
+            if line_array['graph']=='true':
+              nd_workload += ' + '+'Graph'
+              add_to_warning('Workload','Not Supported','Graph')
+            nd_version=str(line_array['dse_version'])
+            dse_nodes=1
+        if (good_node==1):
+          node_status_data[dc][node_name]['Version']=nd_version
+          node_status_data[dc][node_name]['Workload']=nd_workload
+          if dse_nodes==0:
+            node_status_data[dc][node_name]['Workload']='OSS Cassandra'
+            node_status_data[dc][node_name]['Version']=get_oss_ver(cv_path)
+        
+        initial_run=0
+
+    # collect and analyze schema
+    ks = ''
+    dc_ks_rf = {}
+    prev_node = ''
+    is_nodes=0
+
+  initial_run=1
+  for node_path in os.listdir(rootPath):
+    if initial_run==1:
+      nodetoolpath = rootPath + node_path + '/nodetool'
+      if path.exists(nodetoolpath):
+        node = extract_ip(node_path)
+        if (node==''):
+          node=node_path
+        if node in node_ip:
+          if (prev_node==''):
+            if (ks==''):
+              is_nodes=1
+              prev_node=node
+              ks = ''
+              tbl = ''
+              create_stmt = {}
+              tbl_data = {}
+              schemapath = rootPath + node_path + '/driver'
+              if path.isdir(schemapath):
+                schemaFile = open(schemapath + '/schema', 'r')
+                for line in schemaFile:
+                  line = line.strip('\n').strip()
+                  if (line==''): tbl=''
+                  if("CREATE KEYSPACE" in line):
+                    cur_rf = 0
+                    prev_ks = ks
+                    ks = line.split()[2].strip('"')
+                    tbl_data[ks] = {'cql':line,'rf':0}
+                    rf=0;
+                    if ks not in dni_keyspace:
+                      for dc_name in dc_array:
+                        if ("'"+dc_name+"':" in line):
+                          i=0
+                          for prt in line.split():
+                            prt_chk = "'"+dc_name+"':"
+                            if (prt==prt_chk):
+                              rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                              try:
+                                type(dc_ks_rf[dc_name])
+                              except:
+                                dc_ks_rf[dc_name] = {}
+                              try:
+                                type(dc_ks_rf[dc_name][ks])
+                              except:
+                                dc_ks_rf[dc_name][ks] = rf
+                              tbl_data[ks]['rf']+=float(rf)
+                            i+=1
+                        elif("'replication_factor':" in line):
+                          i=0
+                          for prt in line.split():
+                            prt_chk = "'replication_factor':"
+                            if (prt==prt_chk):
+                              rf=line.split()[i+1].strip('}').strip(',').strip("'")
+                              try:
+                                type(dc_ks_rf[dc_name])
+                              except:
+                                dc_ks_rf[dc_name] = {}
+                              try:
+                                type(dc_ks_rf[dc_name][ks])
+                              except:
+                                dc_ks_rf[dc_name][ks] = rf
+                              tbl_data[ks]['rf']+=float(rf)
+                            i+=1
+                        else:tbl_data[ks]['rf']=float(1)
                   if ks not in dni_keyspace:
-                    for dc_name in dc_array:
-                      if ("'"+dc_name+"':" in line):
-                        i=0
-                        for prt in line.split():
-                          prt_chk = "'"+dc_name+"':"
-                          if (prt==prt_chk):
-                            rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                            try:
-                              type(dc_ks_rf[dc_name])
-                            except:
-                              dc_ks_rf[dc_name] = {}
-                            try:
-                              type(dc_ks_rf[dc_name][ks])
-                            except:
-                              dc_ks_rf[dc_name][ks] = rf
-                            tbl_data[ks]['rf']+=float(rf)
-                          i+=1
-                      elif("'replication_factor':" in line):
-                        i=0
-                        for prt in line.split():
-                          prt_chk = "'replication_factor':"
-                          if (prt==prt_chk):
-                            rf=line.split()[i+1].strip('}').strip(',').strip("'")
-                            try:
-                              type(dc_ks_rf[dc_name])
-                            except:
-                              dc_ks_rf[dc_name] = {}
-                            try:
-                              type(dc_ks_rf[dc_name][ks])
-                            except:
-                              dc_ks_rf[dc_name][ks] = rf
-                            tbl_data[ks]['rf']+=float(rf)
-                          i+=1
-                      else:tbl_data[ks]['rf']=float(1)
-                if ks not in dni_keyspace:
-                  if('CREATE INDEX' in line):
-                    prev_tbl = tbl
-                    tbl = line.split()[2].strip('"')
-                    tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
-                    src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-                    src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-                    add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
-                    tbl=''
-                  elif('CREATE CUSTOM INDEX' in line):
-                    prev_tbl = tbl
-                    tbl = line.split()[3].strip('"')
-                    tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
-                    src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
-                    src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
-                    add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
-                    tbl=''
-                  elif('CREATE TYPE' in line):
-                    prev_tbl = tbl
-                    tbl_line = line.split()[2].strip('"')
-                    tbl = tbl_line.split('.')[1].strip().strip('"')
-                    tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
-                    tbl_data[ks][tbl]['field'] = {}
-                  elif('CREATE AGGREGATE' in line):
-                    prev_tbl = tbl
-                    if 'IF NOT EXISTS' in line:
+                    if('CREATE INDEX' in line):
+                      prev_tbl = tbl
                       tbl = line.split()[2].strip('"')
-                    else:
-                      tbl = line.split()[5].strip('"')
-                    tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
-                    tbl_data[ks][tbl]['field'] = {}
-                    try:
-                      warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
-                    except:
-                      warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
-                  elif('CREATE OR REPLACE FUNCTION' in line):
-                    prev_tbl = tbl
-                    tbl = line.split()[4].strip('"')
-                    tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
-                    tbl_data[ks][tbl]['field'] = {}
-                    try:
-                      warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
-                    except:
-                      warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
-                  elif('CREATE TABLE' in line):
-                    prev_tbl = tbl
-                    tbl_line = line.split()[2].strip('"')
-                    tbl = tbl_line.split('.')[1].strip().strip('"')
-                    tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
-                    tbl_data[ks][tbl]['field'] = {}
-                  elif('CREATE MATERIALIZED VIEW' in line ):
-                    prev_tbl = tbl
-                    tbl_line = line.split()[3].strip('"')
-                    tbl = tbl_line.split('.')[1].strip().strip('"')
-                    tbl_data[ks][tbl] = {'type':'Materialized Views', 'cql':line}
-                    tbl_data[ks][tbl]['field'] = {}
-                  if (tbl !=''):
-                    if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized Views'):
-                      src_ks = line.split('.')[0].split()[1].strip('"')
-                      src_tbl = line.split('.')[1].strip('"')
-                      add_tp_tbl('Materialized Views',ks,tbl,src_ks,src_tbl)
-                    elif('PRIMARY KEY' in line):
-                      if(line.count('(') == 1):
-                        tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
-                        tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
-                        del tbl_data[ks][tbl]['cc'][0]
-                      elif(line.count('(') == 2):
-                        tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
-                        tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
-                      tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
-                    elif line.strip() != ');':
+                      tbl_data[ks][tbl] = {'type':'Index', 'cql':line}
+                      src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                      src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                      add_tp_tbl('Secondary Indexes',ks,tbl,src_ks,src_tbl)
+                      tbl=''
+                    elif('CREATE CUSTOM INDEX' in line):
+                      prev_tbl = tbl
+                      tbl = line.split()[3].strip('"')
+                      tbl_data[ks][tbl] = {'type':'Storage-Attached Index', 'cql':line}
+                      src_ks = line.split('ON')[1].split('.')[0].strip().strip('"')
+                      src_tbl = line.split('ON')[1].split('.')[1].split()[0].strip()
+                      add_tp_tbl('Storage-Attached Indexes',ks,tbl,src_ks,src_tbl)
+                      tbl=''
+                    elif('CREATE TYPE' in line):
+                      prev_tbl = tbl
+                      tbl_line = line.split()[2].strip('"')
+                      tbl = tbl_line.split('.')[1].strip().strip('"')
+                      tbl_data[ks][tbl] = {'type':'Type', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
+                    elif('CREATE AGGREGATE' in line):
+                      prev_tbl = tbl
+                      if 'IF NOT EXISTS' in line:
+                        tbl = line.split()[2].strip('"')
+                      else:
+                        tbl = line.split()[5].strip('"')
+                      tbl_data[ks][tbl] = {'type':'UDA', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
                       try:
-                        tbl_data[ks][tbl]['cql'] += ' ' + line
-                        if('AND ' not in line and ' WITH ' not in line):
-                          fld_name = line.split()[0]
-                          fld_type = line.split()[1].strip(',')
-                          if (fld_name!='CREATE'):
-                            tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                        warnings['Astra Guardrails']['User-Defined Aggregate'].append = 'UDA '+tbl+' in '+ks
                       except:
-                        print(('Error1:' + ks + '.' + tbl + ' - ' + line))
-  if (is_nodes==0):
-    exit('No Node Info')
+                        warnings['Astra Guardrails']['User-Defined Aggregate'] = ['UDA '+tbl+' in '+ks]
+                    elif('CREATE OR REPLACE FUNCTION' in line):
+                      prev_tbl = tbl
+                      tbl = line.split()[4].strip('"')
+                      tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
+                      try:
+                        warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
+                      except:
+                        warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
+                    elif('CREATE TABLE' in line):
+                      prev_tbl = tbl
+                      tbl_line = line.split()[2].strip('"')
+                      tbl = tbl_line.split('.')[1].strip().strip('"')
+                      tbl_data[ks][tbl] = {'type':'Table', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
+                    elif('CREATE MATERIALIZED VIEW' in line ):
+                      prev_tbl = tbl
+                      tbl_line = line.split()[3].strip('"')
+                      tbl = tbl_line.split('.')[1].strip().strip('"')
+                      tbl_data[ks][tbl] = {'type':'Materialized Views', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
+                    if (tbl !=''):
+                      if('FROM' in line and tbl_data[ks][tbl]['type']=='Materialized Views'):
+                        src_ks = line.split('.')[0].split()[1].strip('"')
+                        src_tbl = line.split('.')[1].strip('"')
+                        add_tp_tbl('Materialized Views',ks,tbl,src_ks,src_tbl)
+                      elif('PRIMARY KEY' in line):
+                        if(line.count('(') == 1):
+                          tbl_data[ks][tbl]['pk'] = [line.split('(')[1].split(')')[0].split(', ')[0]]
+                          tbl_data[ks][tbl]['cc'] = line.split('(')[1].split(')')[0].split(', ')
+                          del tbl_data[ks][tbl]['cc'][0]
+                        elif(line.count('(') == 2):
+                          tbl_data[ks][tbl]['pk'] = line.split('(')[2].split(')')[0].split(', ')
+                          tbl_data[ks][tbl]['cc'] = line.split('(')[2].split(')')[1].lstrip(', ').split(', ')
+                        tbl_data[ks][tbl]['cql'] += ' ' + line.strip()
+                      elif line.strip() != ');':
+                        try:
+                          tbl_data[ks][tbl]['cql'] += ' ' + line
+                          if('AND ' not in line and ' WITH ' not in line):
+                            fld_name = line.split()[0]
+                            fld_type = line.split()[1].strip(',')
+                            if (fld_name!='CREATE'):
+                              tbl_data[ks][tbl]['field'][fld_name]=fld_type
+                        except:
+                          print(('Error1:' + ks + '.' + tbl + ' - ' + line))
+        if (is_nodes==0):
+          exit('No Node Info')
+        initial_run=0
 
   # begin looping through each node and collect node info
   tbl_row_size = {}
@@ -1412,7 +1481,7 @@ for database_url in data_url:
   for dc,node_status_array in list(node_status_data.items()):
     for node,status_array in list(node_status_array.items()):
       if node in node_ip:
-        row_data = [dc,node,status_array['Load'],status_array['Tokens'],status_array['Rack']]
+        row_data = [dc,node,status_array['Load'],status_array['Tokens'],status_array['Rack'],'','',status_array['Workload'],status_array['Version']]
         write_row('node',row_data,data_format)
         ro = row['node']
         stats_sheets['node'].write(ro-1,5,node_uptime[node],total_format2)
