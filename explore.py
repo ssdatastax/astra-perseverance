@@ -672,11 +672,11 @@ for database_url in data_url:
         
         initial_run=0
 
-    # collect and analyze schema
-    ks = ''
-    dc_ks_rf = {}
-    prev_node = ''
-    is_nodes=0
+  # collect and analyze schema
+  ks = ''
+  dc_ks_rf = {}
+  prev_node = ''
+  is_nodes=0
 
   initial_run=1
   for node_path in os.listdir(rootPath):
