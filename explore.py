@@ -15,7 +15,7 @@ import zipfile
 import json
 
 # Astra Perseverance Version
-version = "1.0.0"
+version = "1.0.2"
 
 # Astra guardrail test parameter defaults
 tp_mv = 2         # Number of materialized views per table
@@ -304,11 +304,14 @@ def parseGC_TS(node,systemlog,systemlogpath):
   dc = node_dc[node]
   if(zipfile.is_zipfile(systemlog)):
     zf = zipfile.ZipFile(systemlog, 'r')
-    systemlogFile = zf.read(zf.namelist()[0])
+    systemlogFile=zf.open(zf.namelist()[0])
+    zf.close()
   else:
     systemlogFile = open(systemlog, 'r')
   for line in systemlogFile:
-    if('GCInspector.java:' in line):
+    if type(line) is bytes:
+      line = line.decode("utf-8")
+    if 'GCInspector.java:' in line:
       if(line.split()[2].strip().count('-')==2): date_pos=2
       else: date_pos=3
       dt = line.split()[date_pos].strip()
@@ -350,7 +353,7 @@ def parseGC_TS(node,systemlog,systemlogpath):
           type(warnings['Database Health']['Tombstones'])
         except:
           warnings['Database Health']['Tombstones']=['Tombstones greater than '+str("{:,}".format(tp_ts))+' in a single read request']
-
+  systemlogFile.close()
 
 # organize the GC pauses into percentage
 def get_gc_data(level,name,gcpause,is_node):
@@ -651,7 +654,7 @@ for database_url in data_url:
               good_node=0
           elif 'DC:' in line and good_node==1:
             dc=line.split(':')[2].strip('\n')
-          elif 'X_11_PADDING' in line and good_node==1:
+          elif ('X_11_PADDING' in line or 'DSE_GOSSIP_STATE' in line) and good_node==1:
             start_line=line.split(':')[0]+':'+line.split(':')[1]+':'
             line_array=json.loads(line.lstrip(start_line))
             if line_array['workload']=='Cassandra': nd_workload='DSE Core'
@@ -986,7 +989,7 @@ for database_url in data_url:
           tz[node]='UTC'
           for logfile in os.listdir(systemlogpath):
             if(logfile.split('.')[0] == 'system'):
-              systemlog = systemlogpath + '/' + logfile
+              systemlog = systemlogpath + logfile
               parseGC_TS(node,systemlog,systemlogpath)
 
   # collect GC/Tombstone data from additional log path
@@ -1001,11 +1004,11 @@ for database_url in data_url:
         if node in node_ip:
           dirpath = 'AdditionalLogs/' + node_path
           if(node.split('-')[0]=='10'):
-            logdir = 'AdditionalLogs/' + node_path + '/var/log/cassandra'
+            logdir = 'AdditionalLogs/' + node_path + '/var/log/cassandra/'
             for logfile in os.listdir(logdir):
               if(logfile.split('.')[0] == 'system'):
                 systemlogpath = logdir + '/'
-                systemlog = systemlogpath + '/' + logfile
+                systemlog = systemlogpath + logfile
                 cor_node = node.replace('-','.')
                 parseGC_TS(cor_node,systemlog,systemlogpath)
 
