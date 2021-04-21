@@ -15,7 +15,7 @@ import zipfile
 import json
 
 # Astra Perseverance Version
-version = "1.0.2"
+version = "1.0.3"
 
 # Astra guardrail test parameter defaults
 tp_mv = 2         # Number of materialized views per table
@@ -63,6 +63,7 @@ for argnum,arg in enumerate(sys.argv):
       'optional arguments:\n'\
       '-v, --version          Version\n'\
       '-h, --help             This help info\n'\
+      '-dni_sys               Do not include system files\n'\
       '-tp_tblcnt             Database Table Count (Guardrail)\n'\
       '                        Number of tables in the database\n'\
       '                        to be listed in the Number of Tables tab\n'\
@@ -128,7 +129,7 @@ include_system = 0
 log_df = '%Y-%m-%d %H:%M:%S'
 dt_fmt = '%m/%d/%Y %I:%M%p'
 tz = {}
-
+dni_sys = 0
 
 # collect and analyze command line arguments
 for argnum,arg in enumerate(sys.argv):
@@ -164,6 +165,8 @@ for argnum,arg in enumerate(sys.argv):
   elif(arg=='-tp_sai'):
     if int(sys.argv[argnum+1]) <= gr_sai:
       tp_sai = float(sys.argv[argnum+1])
+  elif(arg=='-dni_sys'):
+    dni_sys = 1
 
 info_box = 'DataStax Perseverance\n'\
               'Version '+version+'\n'\
@@ -451,12 +454,16 @@ gr_types={
   'Number of Columns':{'gr':gr_colcnt,'tp':tp_colcnt,'sup_tab':0},
   'Large Partitions':{'gr':gr_lpar,'tp':tp_lpar,'sup_tab':0}
 }
-#do not include keyspaces
-dni_keyspace = ['OpsCenter']
 
 #system keyspaces
 system_keyspace = ['OpsCenter','dse_insights_local','solr_admin','test','dse_system','dse_analytics','system_auth','system_traces','system','dse_system_local','system_distributed','system_schema','dse_perf','dse_insights','dse_security','dse_system','killrvideo','dse_leases','dsefs_c4z','HiveMetaStore','dse_analytics','dsefs','spark_system']
 ks_type_abbr = {'app':'Application','sys':'System'}
+
+#do not include keyspaces
+if dni_sys == 1:
+  dni_keyspace = system_keyspace
+else:
+  dni_keyspace = ['OpsCenter']
 
 comments = [
 {
