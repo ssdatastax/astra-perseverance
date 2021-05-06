@@ -13,9 +13,10 @@ import datetime
 import re
 import zipfile
 import json
+import math
 
 # Astra Perseverance Version
-version = "1.0.3"
+version = "1.0.4"
 
 # Astra guardrail test parameter defaults
 tp_mv = 2         # Number of materialized views per table
@@ -202,6 +203,7 @@ info_box = 'DataStax Perseverance\n'\
  
 #
 info_box_options = {'width': 500,'height': 600,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
+default_info_box_options = {'width': 900,'height': 30,'x_offset': 10,'y_offset': 10,'font': {'color': '#3A3A42','size': 12}}
 
 # write comment on worksheet field
 def write_cmt(wksht,coord,title,vis=0):
@@ -398,8 +400,13 @@ def get_gc_data(level,name,gcpause,is_node):
 def sortFunc(e):
   return e['count']
 
+def is_nan(x):
+    return x != x
+    
 # write data on spreadsheet
 def write_row(sheet_name,row_data,d_format,blank_col=[]):
+  print(sheet_name)
+  print(row_data)
   for col_num,data in enumerate(row_data):
     if col_num not in blank_col:
       try:
@@ -408,9 +415,12 @@ def write_row(sheet_name,row_data,d_format,blank_col=[]):
         else:
           stats_sheets[sheet_name].write(row[sheet_name],col_num, int(data), num_format1)
       except:
-        stats_sheets[sheet_name].write(row[sheet_name],col_num, data, d_format)
-
+        try:
+          stats_sheets[sheet_name].write(row[sheet_name],col_num, data, d_format)
+        except:
+          stats_sheets[sheet_name].write(row[sheet_name],col_num, '', d_format)
   row[sheet_name]+=1
+  end_row[sheet_name]=row[sheet_name]
 
 # collect targeted value in a log file
 def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
@@ -433,13 +443,14 @@ def get_param(filepath,param_name,param_pos,ignore='',default_val='Default'):
 sheets_data = []
 sheets_data.append({'sheet_name':'node','tab_name':'Node Data','freeze_row':1,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Load','Tokens','Rack','Uptime (sec)','Uptime','Workload','Version'],'widths':[14,30,14,8,11,15,15,15,15],'extra':0,'comment':'','tp_type':''})
 sheets_data.append({'sheet_name':'ph','tab_name':'Proxihistogram','freeze_row':2,'freeze_col':0,'cfstat_filter':'','headers':['Datacenter','Node','Max','P99','P98','P95','P75','P50','Min','','Datacenter','Node','Max','P99','P98','P95','P75','P50','Min'],'widths':[20,20,10,10,10,10,10,10,10,3,20,20,10,10,10,10,10,10,10],'extra':0,'comment':'','tp_type':''})
-sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str("{:,}".format(tp_drm))+' dropped mutations (cfstats)','tp_type':'drm'})
+sheets_data.append({'sheet_name':'dmutation','tab_name':'Dropped Mutation','freeze_row':1,'freeze_col':0,'cfstat_filter':'Dropped Mutations','headers':['Node','DC','Keyspace','Table','Dropped Mutations'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_drm,'strip':'','extra':0,'comment':'Tables with more than '+str("{:,}".format(tp_drm))+' dropped mutations. (cfstats)','tp_type':'drm'})
 sheets_data.append({'sheet_name':'numTables','tab_name':'Number of Tables','freeze_row':1,'freeze_col':0,'cfstat_filter':'Total number of tables','headers':['Sample Node','DC','Keyspace','Table','Total Number of Tables'],'widths':[18,14,14,25,23],'filter_type':'>=','filter':tp_tblcnt,'strip':'','extra':1,'comment':'','tp_type':'tblcnt'})
-sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Table with partiton sizes greater than '+str(tp_lpar)+' (cfstats)','tp_type':'lpar'})
-sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':tp_sstbl,'strip':'','extra':1,'comment':'','tp_type':'sstbl'})
-sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_rl,'strip':'ms','extra':0,'comment':'','tp_type':'rl'})
-sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_wl,'strip':'ms','extra':0,'comment':'','tp_type':'wl'})
+sheets_data.append({'sheet_name':'partition','tab_name':'Large Partitions','freeze_row':1,'freeze_col':0,'cfstat_filter':'Compacted partition maximum bytes','headers':['Node','DC','Keyspace','Table','Partition Size(MB)'],'widths':[18,14,14,25,18],'filter_type':'>=','filter':tp_lpar*1000000,'strip':'','extra':0,'comment':'Tables with partiton sizes greater than '+str(tp_lpar)+'MB. (cfstats)','tp_type':'lpar'})
+sheets_data.append({'sheet_name':'sstable','tab_name':'SSTable Count','freeze_row':1,'freeze_col':0,'cfstat_filter':'SSTable count','headers':['Example Node','DC','Keyspace','Table','SSTable Count'],'widths':[18,14,14,25,15],'filter_type':'>=','filter':tp_sstbl,'strip':'','extra':1,'comment':'Tables with number of sstables greater than '+str(tp_sstbl)+'.','tp_type':'sstbl'})
+sheets_data.append({'sheet_name':'rlatency','tab_name':'Read Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local read latency','headers':['Node','DC','Keyspace','Table','Read Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_rl,'strip':'ms','extra':0,'comment':'Tables with read latency greater than '+str(tp_rl)+'ms. (cfstats)','tp_type':'rl'})
+sheets_data.append({'sheet_name':'wlatency','tab_name':'Write Latency','freeze_row':1,'freeze_col':0,'cfstat_filter':'Local write latency','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'widths':[18,14,14,25,20],'filter_type':'>=','filter':tp_wl,'strip':'ms','extra':0,'comment':'Tables with write latency greater than '+str(tp_wl)+'ms. (cfstats)','tp_type':'wl'})
 #sheets_data.append({'sheet_name':'ts','tab_name':'Tombstones','headers':['Node','DC','Keyspace','Table','Write Latency (ms)'],'extra':0})
+gc_comment='NOTE: The GC pauses on this sheet are based on GC pauses over 200ms (default setting).  Pauses under 200ms are not recorded in the system logs.'
 
 tp_tbl_data = {
     'Materialized Views':{},
@@ -557,6 +568,7 @@ for database_url in data_url:
   ip_node = {}
   node_status_data = {}
   row={}
+  end_row={}
   tombstone_data=[]
   workloads = {}
   warnings = {'Astra Guardrails':{},'Database Health':{}}
@@ -668,10 +680,13 @@ for database_url in data_url:
             else:
               nd_workload=line_array['workload']
               add_to_warning('Workload','Not Supported',line_array['workload'])
-            if line_array['graph']=='true':
-              nd_workload += ' + '+'Graph'
-              add_to_warning('Workload','Not Supported','Graph')
-            nd_version=str(line_array['dse_version'])
+            try:
+              if line_array['graph']=='true':
+                nd_workload += ' + '+'Graph'
+                add_to_warning('Workload','Not Supported','Graph')
+                nd_version=str(line_array['dse_version'])
+            except:
+              nd_version='DSE pre 5.0'
             dse_nodes=1
         if (good_node==1):
           node_status_data[dc][node_name]['Version']=nd_version
@@ -1428,6 +1443,8 @@ for database_url in data_url:
 
                   else:
                     write_row(sheet_array['sheet_name'],row_data,data_format)
+        
+                  
 
         # organize key data
         key_record = {}
@@ -1453,11 +1470,18 @@ for database_url in data_url:
         for line in proxyhistFile:
           if('%' in line or 'Min' in line or 'Max' in line):
             values = line.split();
-            proxyhistData[dc][node][values[0]]['R']=float(values[1])/1000
-            proxyhistData[dc][node][values[0]]['W']=float(values[2])/1000
+            try:
+              proxyhistData[dc][node][values[0]]['R']=float(values[1])/1000
+              proxyhistData[dc][node][values[0]]['W']=float(values[2])/1000
+            except:
+              proxyhistData[dc][node][values[0]]['R']=float(0)
+              proxyhistData[dc][node][values[0]]['W']=float(0)
+
         
         for row_key in key_record:
           write_row(row_key.split('_')[0],key_data[row_key],data_format)
+
+
 
   # Proxyhistogram tab
   for dc,node_ph_array in list(proxyhistData.items()):
@@ -1500,6 +1524,17 @@ for database_url in data_url:
   stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
   stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
   total_row['node'] = ro+1
+  
+  # write comment
+  for sheet_array in sheets_data:
+    sheet_nm = sheet_array['sheet_name']
+    if sheet_nm not in exclude_tab and sheet_array['comment']!='':
+      try:
+        rw_num=end_row[sheet_nm]+2
+      except: rw_num=3
+      stats_sheets[sheet_nm].insert_textbox('A'+str(rw_num),sheet_array['comment'],default_info_box_options)
+  
+  print(end_row)
   
   # create Tombstones Pause tab
   ts_headers=['Sample DC','Sample Node','Keyspace','Table','Live Rows Read','Tombstones']
@@ -1608,6 +1643,8 @@ for database_url in data_url:
           column+=1
         row_num+=1
         column=0
+
+  gc_worksheet.insert_textbox('A'+str(row_num+1),gc_comment,default_info_box_options)
   
   # create workload tab
   wl_headers=['Keyspace','Table','Read Requests','Average TPS','% Reads','R % RW','','Keyspace','Table','Write Requests','Average TPS','% Writes','W % RW']
