@@ -405,8 +405,6 @@ def is_nan(x):
     
 # write data on spreadsheet
 def write_row(sheet_name,row_data,d_format,blank_col=[]):
-  print(sheet_name)
-  print(row_data)
   for col_num,data in enumerate(row_data):
     if col_num not in blank_col:
       try:
