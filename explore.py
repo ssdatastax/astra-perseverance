@@ -1531,9 +1531,7 @@ for database_url in data_url:
         rw_num=end_row[sheet_nm]+2
       except: rw_num=3
       stats_sheets[sheet_nm].insert_textbox('A'+str(rw_num),sheet_array['comment'],default_info_box_options)
-  
-  print(end_row)
-  
+    
   # create Tombstones Pause tab
   ts_headers=['Sample DC','Sample Node','Keyspace','Table','Live Rows Read','Tombstones']
   ts_cols=['dc','node','ks','tbl','reads','count']
