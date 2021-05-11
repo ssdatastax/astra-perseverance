@@ -16,7 +16,7 @@ import json
 import math
 
 # Astra Perseverance Version
-version = "1.0.4"
+version = "1.0.5"
 
 # Astra guardrail test parameter defaults
 tp_mv = 2         # Number of materialized views per table
@@ -654,6 +654,7 @@ for database_url in data_url:
       if path.isfile(gossippath):
         gossipFile = open(gossippath, 'r')
         dc=''
+        print(gossippath)
         for line in gossipFile:
           if '/' in line:
             if dc != '' and good_node==1:
@@ -670,7 +671,10 @@ for database_url in data_url:
               add_to_warning('Missing Data','Missing Node Data',ip_addr)
               good_node=0
           elif 'DC:' in line and good_node==1:
-            dc=line.split(':')[2].strip('\n')
+            try:
+              dc=line.split(':')[2].strip('\n')
+            except:
+              dc=line.split(':')[1].strip('\n')
           elif ('X_11_PADDING' in line or 'DSE_GOSSIP_STATE' in line) and good_node==1:
             start_line=line.split(':')[0]+':'+line.split(':')[1]+':'
             line_array=json.loads(line.lstrip(start_line))
@@ -1531,7 +1535,7 @@ for database_url in data_url:
         rw_num=end_row[sheet_nm]+2
       except: rw_num=3
       stats_sheets[sheet_nm].insert_textbox('A'+str(rw_num),sheet_array['comment'],default_info_box_options)
-    
+  
   # create Tombstones Pause tab
   ts_headers=['Sample DC','Sample Node','Keyspace','Table','Live Rows Read','Tombstones']
   ts_cols=['dc','node','ks','tbl','reads','count']
