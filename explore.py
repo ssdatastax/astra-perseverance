@@ -16,7 +16,7 @@ import json
 import math
 
 # Astra Perseverance Version
-version = "1.0.5"
+version = "1.0.6"
 
 # Astra guardrail test parameter defaults
 tp_mv = 2         # Number of materialized views per table
@@ -908,7 +908,7 @@ for database_url in data_url:
                   table_tps[ks][tbl]={'write':0,'read':0}
                 if ('Space used (live):' in line):
                   try:
-                    tsize = float(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                    tsize = float(line.split(':')[1].strip()) / tbl_data[ks]['rf']
                   except:
                     tsize = float(line.split(':')[1].strip())
                   if (tsize):
@@ -966,7 +966,6 @@ for database_url in data_url:
                       write_table[ks][tbl] += count
                     except:
                       write_table[ks][tbl] = count
-
 
   # total up R/W across all nodes
   for ks,readtable in list(read_table.items()):
