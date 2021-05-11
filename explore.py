@@ -948,7 +948,7 @@ for database_url in data_url:
                       read_table[ks][tbl] = count
                 if('Local write count: ' in line):
                   try:
-                    count = int(line.split(':')[1].strip()) / float(dc_ks_rf[node_dc[node]][ks])
+                    count = int(line.split(':')[1].strip()) / tbl_data[ks]['rf']
                   except:
                     count = int(line.split(':')[1].strip())
                   if (count > 0):
