@@ -16,15 +16,12 @@ Astra Perseverance is a tool to analyze a cassandra cluster to gain an initial i
 This script extracts and organizes key information from diagnostic files from the cluster related to migrating a cassandra cluster to Astra. The following information is organized in a spreadsheet with multiple tabs:
 
 Workload 
- * Average R/W Requests Transactions per sec (TPS) (Cluster/Table)
- * Average R/W Requests Transactions per Month (TPMO) (Cluster)
+ * Average R/W Requests per sec (TPS) (Cluster/Table)
+ * Average R/W Requests per Month (TPMO) (Cluster)
  * Percentage of R/W Requests of total R,W and RW load (Table)
- * Percentage of R/W Requests of total RW load (Cluster)
- * RF (Keyspace/Table) 
+ * Percentage of R/W Requests of total RW load (Cluster) 
 
 Data Size
- * Data Size (Cluster/Table)
- * RF (Keyspace/Table)
  * Data Set Size (Cluster/Table)
 
 GC Pauses
