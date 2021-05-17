@@ -42,7 +42,7 @@ A list of the following above a test parameter
  * SSTable Count;
  * Read Latency (over 5ms);
  * Write Latency (over 1ms);
- * Tombstones (Future version)
+ * Tombstones
 
 <!-- ORIGINS OF THE CODE -->
 ## Origins of the Code
