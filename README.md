@@ -110,14 +110,14 @@ or for open source cassandra:
 mhost is a file with a list of nodes (one per line)
 
 #### Manually Collect and Create Diagnostic Zip File
-Collect the following files and add the in the file structure below.
+Collect the following files and add the files in the file structure below.
  - [...]/driver/schema
  - [...]/logs/cassandra/system.log
  - [...]/java_system_properties.json
   or
  - [...]/java_system_properties.txt
 
-Run the following nodetool commands on each node and add them into the structure below.
+Run the following nodetool commands on each node and add the output into the structure below.
  - nodetool cfstats > cfstats
  - nodetool info > info
  - nodetool describecluster > describecluster
