@@ -89,7 +89,14 @@ The following items are analzed for potential issues with migration to Astra. Th
 ## Getting Started
 Install XlsxWriter (https://xlsxwriter.readthedocs.io/getting_started.html)
 
-After cloning this project, download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter or using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
+### Gather Diagnostic Data
+After cloning this project, gather diagnostic data from the cluster
+
+#### Using DSE OpsCenter
+Download a diagnostic tarball from a targeted Cassandra cluster through DSE OpsCenter
+
+#### Using Diagnostic-Collection Tool
+Collect diagnostic tarball using the Cassandra Diagnostic Collection Tool - https://github.com/datastax-toolkit/diagnostic-collection. 
 Note: If you are using the Cassandra Diagnostic Collection tool, it is easiest to collect a complete cluster diag tarball at once using:
 ```
 ./collect_diag.sh -t dse -f mhosts -r -s \
@@ -101,6 +108,42 @@ or for open source cassandra:
   "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
 ```
 mhost is a file with a list of nodes (one per line)
+
+#### Manually Collect and Create Diagnostic Zip File
+Collect the following files and add the in the file structure below.
+ - [...]/driver/schema
+ - [...]/logs/cassandra/system.log
+ - [...]/java_system_properties.json
+  or
+ - [...]/java_system_properties.txt
+
+Run the following nodetool commands on each node and add them into the structure below.
+ - nodetool cfstats > cfstats
+ - nodetool info > info
+ - nodetool describecluster > describecluster
+ - nodetool gossipinfo > gossipinfo
+ - nodetool status > status
+ - nodetool version > version
+
+
+```
+[Cluster_Name]
+  nodes
+    [ipaddress]
+      nodetool
+        cfsats
+        info
+        describecluster
+        gossipinfo
+        status
+        version
+      driver
+        schema
+      logs
+        cassandra
+          system.log
+      java_system_properties.json _(or java_system_properties.txt)_
+```
 
 ### Commands and Arguments
 
