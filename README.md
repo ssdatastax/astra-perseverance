@@ -142,7 +142,7 @@ Run the following nodetool commands on each node and add them into the structure
       logs
         cassandra
           system.log
-      java_system_properties.json _(or java_system_properties.txt)_
+      java_system_properties.json (or java_system_properties.txt)
 ```
 
 ### Commands and Arguments
