@@ -14,6 +14,7 @@ import re
 import zipfile
 import json
 import math
+import json
 
 # Astra Perseverance Version
 version = "1.0.6"
@@ -22,7 +23,7 @@ version = "1.0.6"
 tp_mv = 2         # Number of materialized views per table
 tp_si = 1        # Number of indexes per table
 tp_sai = 8       # Number of storage-attached indexes per table
-tp_tblcnt = 175   # Number of tables in a keyspace
+tp_tblcnt = 155   # Number of tables in a keyspace
 tp_colcnt = 45    # Number of columns in a table
 tp_lpar = 100     # Partition size (MB)
 
@@ -37,9 +38,9 @@ tp_ts = 1000      # Number of tombstones in a single read request
 #Astra Guardrails
 gr_mv = 2         # Number of materialized views per table
 gr_si = 1        # Number of indexes per table
-gr_sai = 10       # Number of storage-attached indexes per table
+gr_sai = 50       # Number of storage-attached indexes per table
 gr_tblcnt = 200   # Number of tables in a keyspace
-gr_colcnt = 50    # Number of columns in a table
+gr_colcnt = 75    # Number of columns in a table
 gr_lpar = 200     # Partition size (MB)
 
 # communicate command line help
@@ -64,7 +65,7 @@ for argnum,arg in enumerate(sys.argv):
       'optional arguments:\n'\
       '-v, --version          Version\n'\
       '-h, --help             This help info\n'\
-      '-dni_sys               Do not include system files\n'\
+      '-incl_sys              Include system files\n'\
       '-tp_tblcnt             Database Table Count (Guardrail)\n'\
       '                        Number of tables in the database\n'\
       '                        to be listed in the Number of Tables tab\n'\
@@ -130,7 +131,7 @@ include_system = 0
 log_df = '%Y-%m-%d %H:%M:%S'
 dt_fmt = '%m/%d/%Y %I:%M%p'
 tz = {}
-dni_sys = 0
+dni_sys = 1
 
 # collect and analyze command line arguments
 for argnum,arg in enumerate(sys.argv):
@@ -166,8 +167,8 @@ for argnum,arg in enumerate(sys.argv):
   elif(arg=='-tp_sai'):
     if int(sys.argv[argnum+1]) <= gr_sai:
       tp_sai = float(sys.argv[argnum+1])
-  elif(arg=='-dni_sys'):
-    dni_sys = 1
+  elif(arg=='-incl_sys'):
+    dni_sys = 0
 
 info_box = 'DataStax Perseverance\n'\
               'Version '+version+'\n'\
@@ -300,7 +301,7 @@ def get_dc(rootPath,statuspath,node):
             node_status_data[dc][node_name] = {'Load':values[2] + ' ' + values[3],'Tokens':int(values[4]),'Rack':values[7]}
         else:
           add_to_warning('Missing Data','Missing Node Data',ip_addr)
-          
+          summary_json['missing_data']=1
   else:
     exclude_tab.append('node')
 
@@ -572,7 +573,20 @@ for database_url in data_url:
   warnings = {'Astra Guardrails':{},'Database Health':{}}
 
   rootPath = database_url + '/nodes/'
+  
+  # create summary json array
+  summary_json = {}
+  summary_json['workload']={}
+  summary_json['workload']['total_read_tps']=0
+  summary_json['workload']['total_read_per']=0
+  summary_json['workload']['total_write_tps']=0
+  summary_json['workload']['total_write_per']=0
+  summary_json['dataset_size']={}
+  summary_json['dataset_size']['total']=0
+  summary_json['missing_data']=0
 
+#  summary_json.append('guardrails'={})
+#  summary_json.append('health':{})
  
   # collect node info
   for node_path in os.listdir(rootPath):
@@ -654,7 +668,6 @@ for database_url in data_url:
       if path.isfile(gossippath):
         gossipFile = open(gossippath, 'r')
         dc=''
-        print(gossippath)
         for line in gossipFile:
           if '/' in line:
             if dc != '' and good_node==1:
@@ -669,6 +682,7 @@ for database_url in data_url:
               good_node=1
             else:
               add_to_warning('Missing Data','Missing Node Data',ip_addr)
+              summary_json['missing_data']=1
               good_node=0
           elif 'DC:' in line and good_node==1:
             try:
@@ -813,6 +827,15 @@ for database_url in data_url:
                         warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
                       except:
                         warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
+                    elif 'CREATE FUNCTION' in line:
+                      prev_tbl = tbl
+                      tbl = line.split()[2].strip('"')
+                      tbl_data[ks][tbl] = {'type':'UDF', 'cql':line}
+                      tbl_data[ks][tbl]['field'] = {}
+                      try:
+                        warnings['Astra Guardrails']['User-Defined Function'].append = 'UDF '+tbl+' in '+ks
+                      except:
+                        warnings['Astra Guardrails']['User-Defined Function'] = ['UDF '+tbl+' in '+ks]
                     elif('CREATE TABLE' in line):
                       prev_tbl = tbl
                       tbl_line = line.split()[2].strip('"')
@@ -895,17 +918,24 @@ for database_url in data_url:
                 type(table_tps[ks])
               except:
                 table_tps[ks]={}
+                summary_json['workload'][ks]={}
+                summary_json['dataset_size'][ks]={}
               if('Table: ' in line):
                 tbl = line.split(':')[1].strip()
                 is_index = 0
               elif('Table (index): ' in line):
                 tbl = line.split(':')[1].strip()
                 is_index = 1
+              elif('Column Family: ' in line):
+                tbl = line.split(':')[1].strip()
+                is_index = 0
               if(tbl!=''):
                 try:
                   type(table_tps[ks][tbl])
                 except:
                   table_tps[ks][tbl]={'write':0,'read':0}
+                  summary_json['workload'][ks][tbl]={}
+                  summary_json['dataset_size'][ks][tbl]={}
                 if ('Space used (live):' in line):
                   try:
                     tsize = float(line.split(':')[1].strip()) / tbl_data[ks]['rf']
@@ -1052,7 +1082,6 @@ for database_url in data_url:
   dc_list = list(dict.fromkeys(dc_list))
   dc_list.sort()
 
-
   # Astra Guardrails
   gr = 'Astra Guardrails'
   for tp_name, ks_array in list(tp_tbl_data.items()):
@@ -1068,8 +1097,6 @@ for database_url in data_url:
               warnings[gr][tp_name].append(str(len(tp_array))+' '+tp_name+' of '+ks+'.'+tbl+'***')
             elif len(tp_array)>tp_lmt:
               warnings[gr][tp_name].append(str(len(tp_array))+' '+tp_name+' of '+ks+'.'+tbl)
-
-
 
   # review column count
   gr_lmt = gr_types['Number of Columns']['gr']
@@ -1095,7 +1122,7 @@ for database_url in data_url:
   stats_sheets = {}
   worksheet = {}
   workbook = xlsxwriter.Workbook(database_url + '/' + database_name + '_' + 'astra_chart' + '.xlsx')
-  
+
   # Create Tabs
   worksheet_metrics = workbook.add_worksheet('Astra Metrics')
   worksheet = workbook.add_worksheet('Workload')
@@ -1513,6 +1540,7 @@ for database_url in data_url:
 
   # Node data tab
   ro=0
+  total_uptime=0
   for dc,node_status_array in list(node_status_data.items()):
     for node,status_array in list(node_status_array.items()):
       if node in node_ip:
@@ -1521,10 +1549,15 @@ for database_url in data_url:
         ro = row['node']
         stats_sheets['node'].write(ro-1,5,node_uptime[node],total_format2)
         stats_sheets['node'].write_formula('G'+str(ro),'=INT(F'+str(ro)+'/86400) & " days " & TEXT((F'+str(ro)+'/86400)-INT(F'+str(ro)+'/86400),"hh:mm:ss")',data_format3)
+        total_uptime+=node_uptime[node]
+
   stats_sheets['node'].write('E'+str(ro+1),'Avg Uptime',title_format)
   stats_sheets['node'].write_formula('F'+str(ro+1),'=AVERAGE(F2:F'+str(ro)+')',total_format2)
   stats_sheets['node'].write_formula('G'+str(ro+1),'=INT(F'+str(ro+1)+'/86400) & " days " & TEXT((F'+str(ro+1)+'/86400)-INT(F'+str(ro+1)+'/86400),"hh:mm:ss")',data_format3)
   total_row['node'] = ro+1
+ 
+  # summary average uptime in sec
+  summary_json['avg_uptime']=total_uptime/ro
   
   # write comment
   for sheet_array in sheets_data:
@@ -1679,6 +1712,10 @@ for database_url in data_url:
     ds_worksheet.write(row_num,column+2,cnt,total_format1)
     row_num+=1
 
+    summary_json['dataset_size'][ks][tbl]['size']=cnt
+    summary_json['dataset_size']['total']+=cnt
+
+
   total_row['size']=row_num
   ds_worksheet.write(row_num,column,'Total',header_format4)
   ds_worksheet.write(row_num,column+2,'=SUM(C3:C'+ str(row_num)+')',total_format1)
@@ -1704,6 +1741,11 @@ for database_url in data_url:
     worksheet.write(row_num,column+3,table_tps[ks][tbl]['read'],tps_format1)
     worksheet.write(row_num,column+4,float(cnt)/total_reads,perc_format)
     worksheet.write(row_num,column+5,float(cnt)/float(total_rw),perc_format)
+
+    summary_json['workload'][ks][tbl]['read']={'read_req':cnt,'avg_tps':table_tps[ks][tbl]['read'],'perc_read':float(cnt)/total_reads,'perc_rw':float(cnt)/float(total_rw)}
+    summary_json['workload']['total_read_tps']+=table_tps[ks][tbl]['read']
+    summary_json['workload']['total_read_per']+=float(cnt)/float(total_rw)
+
     row_num+=1
 
   total_row['read']=row_num
@@ -1739,6 +1781,10 @@ for database_url in data_url:
     worksheet.write(row_num,column+4,float(cnt)/total_writes,perc_format)
     worksheet.write(row_num,column+5,float(cnt)/float(total_rw),perc_format)
     row_num+=1
+
+    summary_json['workload'][ks][tbl]['write']={'write_req':cnt,'avg_tps':table_tps[ks][tbl]['write'],'perc_write':float(cnt)/total_writes,'perc_rw':float(cnt)/float(total_rw)}
+    summary_json['workload']['total_write_tps']+=table_tps[ks][tbl]['write']
+    summary_json['workload']['total_write_per']+=float(cnt)/float(total_rw)
 
   total_row['write']=row_num
 
@@ -1798,6 +1844,12 @@ for database_url in data_url:
 
   worksheet_metrics.activate()
   workbook.close()
+
+  summary_json['warnings']=warnings
+  # create json summary file
+  with open(database_url + '/' + 'summary.json', 'w') as jsonfile:
+      json.dump(summary_json, jsonfile)
+  
   print((('"' + database_name + '_' + 'astra_chart' + '.xlsx"' + ' was created in "' + database_url) +'"'))
 exit();
 
