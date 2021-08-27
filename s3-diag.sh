@@ -45,7 +45,6 @@ aws configure set s3.signature_version s3v4
 
 aws s3 cp s3://"$BUCKET"/"$KEY" "$KEY"
 
-unzip "$KEY"
 
 #  curl -i https://track.customer.io/api/v1/events \
 #    -X POST \
@@ -58,11 +57,22 @@ unzip "$KEY"
 #    -d data[db_name]="$DB_NAME" \
 #    -d data[recipient]="$EMAIL"
 
-python explore.py -p ${ORIGINALNAME%.zip}
+if [[ $ORIGINALNAME == *.zip ]] then
+  POSTFIX=.zip
+  unzip "$KEY"
+fi
 
-ls "${ORIGINALNAME%.zip}"
+if [[ $ORIGINALNAME == *.tar.gz ]] then
+  POSTFIX=.tar.gz
+  tar -xvf "$KEY"
+fi
 
-aws s3 cp "${ORIGINALNAME%.zip}/summary.json" s3://"$BUCKET"/"${KEY%.zip}-summary.json" 
-aws s3 cp "${ORIGINALNAME%.zip}"/*.xlsx s3://"$BUCKET"/"${KEY%.zip}.xlsx" 
+
+python explore.py -p ${ORIGINALNAME%$POSTFIX}
+
+ls "${ORIGINALNAME%$POSTFIX}"
+
+aws s3 cp "${ORIGINALNAME%$POSTFIX}/summary.json" s3://"$BUCKET"/"${KEY%$POSTFIX}-summary.json" 
+aws s3 cp "${ORIGINALNAME%$POSTFIX}"/*.xlsx s3://"$BUCKET"/"${KEY%$POSTFIX}.xlsx" 
 
 aws s3 rm s3://"$BUCKET"/"$KEY" 
