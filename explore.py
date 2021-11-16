@@ -1493,18 +1493,20 @@ for database_url in data_url:
 
         # collect node R/W latency data - coordinator level latencies
         proxyhist = rootPath + node_path + '/nodetool/proxyhistograms'
-        proxyhistFile = open(proxyhist, 'r')
-        proxyhistData[dc][node] = {'Max':{},'99%':{},'98%':{},'95%':{},'75%':{},'50%':{},'Min':{}}
-        for line in proxyhistFile:
-          if('%' in line or 'Min' in line or 'Max' in line):
-            values = line.split();
-            try:
-              proxyhistData[dc][node][values[0]]['R']=float(values[1])/1000
-              proxyhistData[dc][node][values[0]]['W']=float(values[2])/1000
-            except:
-              proxyhistData[dc][node][values[0]]['R']=float(0)
-              proxyhistData[dc][node][values[0]]['W']=float(0)
+        proxyhist_exists = os.path.exists(proxyhist)
 
+        if (proxyhist_exists):
+          proxyhistFile = open(proxyhist, 'r')
+          proxyhistData[dc][node] = {'Max':{},'99%':{},'98%':{},'95%':{},'75%':{},'50%':{},'Min':{}}
+          for line in proxyhistFile:
+            if('%' in line or 'Min' in line or 'Max' in line):
+              values = line.split();
+              try:
+                proxyhistData[dc][node][values[0]]['R']=float(values[1])/1000
+                proxyhistData[dc][node][values[0]]['W']=float(values[2])/1000
+              except:
+                proxyhistData[dc][node][values[0]]['R']=float(0)
+                proxyhistData[dc][node][values[0]]['W']=float(0)        
         
         for row_key in key_record:
           write_row(row_key.split('_')[0],key_data[row_key],data_format)
@@ -1512,31 +1514,32 @@ for database_url in data_url:
 
 
   # Proxyhistogram tab
-  for dc,node_ph_array in list(proxyhistData.items()):
-    for node,proxyhist_array in list(node_ph_array.items()):
-      if node in node_ip:
-        row_data = [
-          dc,
-          node,
-          proxyhist_array['Max']['R'],
-          proxyhist_array['99%']['R'],
-          proxyhist_array['98%']['R'],
-          proxyhist_array['95%']['R'],
-          proxyhist_array['75%']['R'],
-          proxyhist_array['50%']['R'],
-          proxyhist_array['Min']['R'],
-          '',
-          dc,
-          node,
-          proxyhist_array['Max']['W'],
-          proxyhist_array['99%']['W'],
-          proxyhist_array['98%']['W'],
-          proxyhist_array['95%']['W'],
-          proxyhist_array['75%']['W'],
-          proxyhist_array['50%']['W'],
-          proxyhist_array['Min']['W'],
-        ]
-        write_row('ph',row_data,data_format,[9])
+  if (proxyhist_exists):
+    for dc,node_ph_array in list(proxyhistData.items()):
+      for node,proxyhist_array in list(node_ph_array.items()):
+        if node in node_ip:
+          row_data = [
+            dc,
+            node,
+            proxyhist_array['Max']['R'],
+            proxyhist_array['99%']['R'],
+            proxyhist_array['98%']['R'],
+            proxyhist_array['95%']['R'],
+            proxyhist_array['75%']['R'],
+            proxyhist_array['50%']['R'],
+            proxyhist_array['Min']['R'],
+            '',
+            dc,
+            node,
+            proxyhist_array['Max']['W'],
+            proxyhist_array['99%']['W'],
+            proxyhist_array['98%']['W'],
+            proxyhist_array['95%']['W'],
+            proxyhist_array['75%']['W'],
+            proxyhist_array['50%']['W'],
+            proxyhist_array['Min']['W'],
+          ]
+          write_row('ph',row_data,data_format,[9])
 
   # Node data tab
   ro=0
