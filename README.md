@@ -124,7 +124,7 @@ Run the following nodetool commands on each node and add the output into the fil
  - nodetool gossipinfo > gossipinfo
  - nodetool status > status
  - nodetool version > version
-
+ - nodetool proxyhistograms > proxyhistograms
 
 ```
 [Cluster_Name]
@@ -137,6 +137,7 @@ Run the following nodetool commands on each node and add the output into the fil
         gossipinfo
         status
         version
+        proxyhistograms
       driver
         schema
       logs
