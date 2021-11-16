@@ -37,11 +37,11 @@ Node R/W Latency Proxihistogram
 
 A list of the following above a test parameter
  * Dropped Mutations (Node/Keyspace/Table)
- * Table Count per DC;
- * Large Partitions;
- * SSTable Count;
- * Read Latency (over 5ms);
- * Write Latency (over 1ms);
+ * Table Count per DC
+ * Large Partitions
+ * SSTable Count
+ * Read Latency (over 5ms)
+ * Write Latency (over 1ms)
  * Tombstones
 
 <!-- ORIGINS OF THE CODE -->
